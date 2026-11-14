@@ -247,7 +247,7 @@
     });
   }
 
-  function colourise(half, ctx, map, colourAt, maxAlpha) {
+  function colourise(half, ctx, map, colourAt, maxAlpha, magnitude) {
     const c = half.getContext("2d");
     const img = c.getImageData(0, 0, half.width, half.height);
     const d = img.data;
@@ -261,10 +261,11 @@
     for (let i = 0; i < d.length; i += 4) {
       const a = d[i + 3];
       if (!a) continue;
-      const t = Math.pow(a / top, 0.8);
+      const t = Math.min(1, Math.pow(a / top, 0.8));
       const rgb = colourAt(t);
       d[i] = rgb[0]; d[i + 1] = rgb[1]; d[i + 2] = rgb[2];
-      d[i + 3] = Math.min(255, Math.round(t * maxAlpha));
+      // magnitude keeps a quiet hour quiet: three people should not paint the whole city
+      d[i + 3] = Math.min(255, Math.round(t * maxAlpha * (magnitude == null ? 1 : magnitude)));
     }
     c.putImageData(img, 0, 0);
     ctx.save();
@@ -277,11 +278,11 @@
     return Math.max.apply(null, shapes.map((s) => Math.max(1, s.people) / Math.max(80, lengthOf(s.pts))).concat([1e-6]));
   }
 
-  function drawTrafficHeat(ctx, map, shapes) {
+  function drawTrafficHeat(ctx, map, shapes, magnitude) {
     if (!shapes.length) return;
     const half = ensureHalf(map);
     deposit(half, shapes, topDensity(shapes), map.zoom);
-    colourise(half, ctx, map, rampAt, 210);
+    colourise(half, ctx, map, rampAt, 210, magnitude);
   }
 
   /* ------------------------------------------------------------- aggregate */
@@ -308,30 +309,18 @@
     return v;
   }
 
-  /* arrival curves are cumulative, so the 15-minute window is their difference */
-  function cumulative(curve) {
-    const pts = (curve || []).map((c) => [c.t, c.share]).sort((a, b) => a[0] - b[0]);
-    return (t) => {
-      if (!pts.length) return 0;
-      if (t <= pts[0][0]) return pts[0][1];
-      for (let i = 1; i < pts.length; i++) {
-        if (t <= pts[i][0]) {
-          const t0 = pts[i - 1][0], s0 = pts[i - 1][1];
-          const t1 = pts[i][0], s1 = pts[i][1];
-          const f = (t - t0) / (t1 - t0 || 1);
-          return s0 + (s1 - s0) * f;
-        }
-      }
-      return pts[pts.length - 1][1];
-    };
+  /* each arrival entry is the share arriving in the 15 minutes starting at its `t`:
+     at 16:45 an 18:00 start uses the slot at -90, i.e. 16:30-16:45, not a fraction
+     of a slot boundary that never lands on the chosen minute. */
+  function arrivalShare(curve, off) {
+    let sum = 0;
+    (curve || []).forEach((c) => { if (c.t >= off - 15 && c.t < off) sum += c.share; });
+    return Math.min(1, Math.max(0, sum));
   }
 
   /* how many of this event's people are on a route in the 15 minutes before `now` */
   function enRoute(flow, now, startMin) {
-    const C = cumulative(flow.arrival);
-    const off = now - startMin;
-    const share = Math.max(0, C(Math.min(off, 15)) - C(off - 15));
-    return Math.max(0, flow.attendance.mid) * share;
+    return Math.max(0, flow.attendance.mid) * arrivalShare(flow.arrival, now - startMin);
   }
 
   function aggregate() {
@@ -374,7 +363,8 @@
       people: Math.max(1, leg.people), share: leg.people / total, mode: leg.mode, name: leg.name,
     })).filter((s) => s.pts.length > 1);
 
-    drawTrafficHeat(ctx, map, shapes);
+    const magnitude = Math.min(1, Math.max(0.08, Math.log10(total + 1) / 3.6));
+    drawTrafficHeat(ctx, map, shapes, magnitude);
 
     // the venues people are heading to, sized by how many are on their way
     [...agg.venues.entries()].sort((a, b) => b[1] - a[1]).forEach(([id, people]) => {
@@ -448,7 +438,7 @@
   /* the hour that puts the most people on the street on this day */
   function peakMinute(day) {
     let best = 19 * 60, top = -1;
-    for (let m = 15 * 60; m <= 26 * 60; m += 15) {
+    for (let m = 6 * 60; m <= 30 * 60; m += 15) {
       const keep = S.minutes;
       S.day = day; S.minutes = m;
       const people = aggregate().people;

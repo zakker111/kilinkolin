@@ -21,7 +21,8 @@
 
   function toEvents(rows) {
     return rows.map((r) => ({
-      date: r[0], time: r[1] || "", title: r[2], venue: r[3],
+      // the feed omits a start time for a few events; count those at a typical 19:00 start
+      date: r[0], time: r[1] || "19:00", title: r[2], venue: r[3],
       id: r[7], seed: !!r[13]
     })).filter((e) => e.id);
   }
@@ -73,7 +74,7 @@
       `Every number is an <b>estimate</b> from a population model — not measured attendance, not tracking. ` +
       `Basemap © OpenStreetMap contributors. Music data from ` +
       `<a href="https://github.com/zakker111/tampere-keikat" target="_blank" rel="noopener">Tampere Keikat</a> (MIT); ` +
-      `rows marked SAMPLE are placeholders.`;
+      `rows marked SAMPLE are placeholders. Events without a listed start are counted at 19:00.`;
   }
 
   async function load() {
