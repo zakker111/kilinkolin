@@ -1,0 +1,15 @@
+{
+  "note": "Sample non-music events so sports/student/theatre/library categories are visible before those feeds are wired. Every row is marked seed=true and is labelled SAMPLE in the UI. Replace with real adapters (liiga.fi, basket.fi, treykalenteri, Eventz topics).",
+  "events": [
+    ["2026-11-17", "18:30", "Ilves - Tappara (SAMPLE)", "Nokia Arena", "hockey", 0, "https://liiga.fi/fi/ohjelma", "sport", "hockey", true],
+    ["2026-11-20", "17:00", "Ilves - HJK (SAMPLE)", "Tammelan stadion", "football", 0, "https://www.veikkausliiga.com/", "sport", "football", true],
+    ["2026-11-18", "18:30", "Pyrintö - Bisons (SAMPLE)", "Pyynikin palloiluhalli", "basketball", 0, "https://www.basket.fi/", "sport", "basketball", true],
+    ["2026-11-19", "19:00", "Manse PP - Vimpelin Veto (SAMPLE)", "Kaupin pesäpallostadion", "pesapallo", 0, "https://www.superpesis.fi/", "sport", "pesapallo", true],
+    ["2026-11-21", "21:00", "Hervannan appropäivän jatkot (SAMPLE)", "Yo-talo", "student", 0, "https://treykalenteri.fi/", "student", "party", true],
+    ["2026-11-25", "18:00", "Sitsit: Teekkarisitsit (SAMPLE)", "Hiedanranta", "student", 0, "https://treykalenteri.fi/", "student", "sitsit", true],
+    ["2026-11-22", "14:00", "Kirjailijavieras: syksyn uutuudet (SAMPLE)", "Pääkirjasto Metso, Pirkankatu 2, 33210 Tampere", "literature", 1, "https://tapahtumat.tampere.fi/", "literature", "author", true],
+    ["2026-11-23", "19:00", "Kansallisteatteri: vierailuesitys (SAMPLE)", "Tampere-talo", "theatre", 0, "https://www.tampere-talo.fi/", "theatre", "play", true],
+    ["2026-11-28", "10:00", "Kauppahallin joulumarkkinat (SAMPLE)", "Tampere (useita paikkoja)", "market", 1, "https://tapahtumat.tampere.fi/", "market", "fair", true],
+    ["2026-11-29", "13:00", "Perheiden elokuvapäivä (SAMPLE)", "Tesoman kirjasto, Tesomankatu 4, 33310 Tampere", "film", 1, "https://tapahtumat.tampere.fi/", "film", "screening", true]
+  ]
+}
