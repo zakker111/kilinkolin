@@ -58,11 +58,16 @@ jobs:
         run: python3 scripts/build.py --city tampere --mode full
 
       # New events bring new origins; fetch their street geometry before deploying so the
-      # heat follows roads instead of falling back to straight lines. A router outage must
-      # not block the weekly update, so the step is allowed to fail.
+      # heat follows roads instead of falling back to straight lines. The first run has no
+      # cache yet, so it seeds every venue/zone leg; later runs only fill what is missing.
       - name: Fetch missing street routes
         continue-on-error: true
-        run: python3 scripts/routes.py --from-flow --max 300
+        run: |
+          if [ -s registry/routes.json ]; then
+            python3 scripts/routes.py --from-flow --max 300
+          else
+            python3 scripts/routes.py --max 1400
+          fi
 
       - name: Rebuild with the new routes
         run: python3 scripts/build.py --city tampere --mode full
