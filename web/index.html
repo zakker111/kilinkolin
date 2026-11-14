@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kilinkolin — estimated crowd on routes</title>
+<meta name="description" content="Pick a day and an hour: an estimated heat map of where the crowd in Tampere is on its way to events.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+<div class="brickwall"></div>
+
+<header class="hero">
+  <div class="eyebrow">Manse — estimated crowd flow</div>
+  <h1>KILIN<em>KOLIN</em></h1>
+  <div id="updatedBadge" class="status-pill"><span class="status-dot"></span><span class="status-text">Loading…</span></div>
+</header>
+
+<main>
+  <div class="bar">
+    <div class="days" id="dayStrip" aria-label="Day"></div>
+    <div class="timeRow">
+      <span class="timeCap">Hour</span>
+      <input id="timeSlider" class="time" type="range" min="900" max="1560" step="15" value="1140" aria-label="Hour of the evening">
+      <span class="timeLabel" id="timeLabel">19:00</span>
+    </div>
+  </div>
+
+  <div class="mapWrap" id="mapWrap">
+    <canvas id="mapCanvas"></canvas>
+
+    <div class="estimate" id="estimate"></div>
+
+    <div class="legend" id="legendHeat">
+      <div class="legend-title">Estimated share of arrivals</div>
+      <div class="ramp"><i style="background:#960d0a"></i><i style="background:#d13319"></i><i style="background:#e66f1a"></i><i style="background:#ee9f18"></i><i style="background:#f4c20d"></i></div>
+      <div class="legend-ends"><span>more likely</span><span>less likely</span></div>
+      <div class="legend-foot">denser / deeper = more people on routes there</div>
+    </div>
+
+    <div class="mapZoom">
+      <button id="zoomIn" title="Zoom in">+</button>
+      <button id="zoomOut" title="Zoom out">−</button>
+    </div>
+    <div class="attrib" id="attrib"></div>
+    <div class="mapLoading" id="mapLoading">Loading map…</div>
+  </div>
+</main>
+
+<footer>
+  <span id="health" class="health"></span><br>
+  <span id="roadNote"></span><br>
+  <span id="footNote"></span>
+</footer>
+
+<script src="./config.js"></script>
+<script src="./map.js"></script>
+<script src="./app.js"></script>
+</body>
+</html>
