@@ -153,9 +153,19 @@ def fetch_liiga():
                 start = dt.datetime.fromisoformat(g["start"].replace("Z", "+00:00")).astimezone(ZoneInfo("Europe/Helsinki"))
             except (KeyError, ValueError):
                 continue
+            gametime = g.get("gameTime")
+            if not isinstance(gametime, (int, float)):
+                gametime = 0
+            end_min = None
+            if gametime > 0:
+                # playing-time length (regulation + overtime, excludes intermissions):
+                # real end only when the feed carried it, otherwise fall back to the
+                # planned playing time so we are not silently wrong about event length
+                end_min = start.hour * 60 + start.minute + gametime / 60.0
             rows.append([
                 start.date().isoformat(), start.strftime("%H:%M"), f"{home} – {away}",
                 "Nokia Arena", "hockey", False, g.get("buyTicketsUrl") or "", "sport", "hockey", 0,
+                end_min,
             ])
         log(f"[sports] fetched {len(rows)} Tampere home fixtures")
         return rows, "OK"
@@ -443,7 +453,7 @@ ZONES = []
 VENUES = []
 
 
-def build(mode="full"):
+def build(mode="full", with_samples=False):
     global ZONES, VENUES
     os.makedirs(GEO, exist_ok=True)
     venues_doc = load_json(os.path.join(ROOT, "registry", "venues.json"))
@@ -461,9 +471,10 @@ def build(mode="full"):
     log(f"[routes] {len(ROUTES)} walking legs cached")
 
     feed, music_status = fetch_keikat()
-    seed = load_json(os.path.join(ROOT, "data", "seed_events.json"))
+    # data/seed_events.json holds SAMPLE placeholders only; they are never published
+    seed = load_json(os.path.join(ROOT, "data", "seed_events.json")) if with_samples else {"events": []}
     sports_rows, sports_status = fetch_liiga()
-    status = {"music": music_status, "seed": "OK", "sports": sports_status}
+    status = {"music": music_status, "seed": "ON" if with_samples else "OFF", "sports": sports_status}
 
     events = []
     unmatched = Counter()
@@ -491,7 +502,9 @@ def build(mode="full"):
         })
 
     for row in seed.get("events", []) + sports_rows:
-        date, time_s, title, venue_raw, genre, free, url, kind, sub, is_seed = row[:10]
+        # sports rows may carry an explicit end minute from the Liiga adapter now
+        date, time_s, title, venue_raw, genre, free, url, kind, sub, is_seed, *rest = row
+        end_min_from_feed = rest[0] if rest and rest[0] is not None else None
         venue = resolve_venue(venue_raw, alias_idx, VENUES) or next(v for v in VENUES if v["id"] == "tampere_muu")
         hour = int(time_s.split(":")[0]) if time_s and ":" in time_s else None
         category, sub2 = classify(kind, sub, None, title)
@@ -500,6 +513,7 @@ def build(mode="full"):
             "venue": venue, "free": bool(free), "url": url, "hour": hour,
             "legacy_genre": genre if genre in MUSIC_GENRES else sub2,
             "category": category, "sub": sub2, "kind": kind, "seed": bool(is_seed),
+            "end_min": end_min_from_feed,
         })
 
     if unmatched:
@@ -527,8 +541,12 @@ def build(mode="full"):
         by_area[venue["area"]] += 1
 
         start_min = clock_minutes(e["time"])
-        duration = DURATION_SUB.get(e["sub"], DURATION_MIN.get(e["category"], 120))
-        end_min = start_min + duration
+        # Prefer a real end time from the feed when a sport adapter provides one.
+        if e.get("end_min") is not None:
+            end_min = float(e["end_min"])
+        else:
+            duration = DURATION_SUB.get(e["sub"], DURATION_MIN.get(e["category"], 120))
+            end_min = start_min + duration
         egress = []
         for idx, (t, s) in enumerate(EGRESS):
             nxt = EGRESS[idx + 1][0] if idx + 1 < len(EGRESS) else t + 15
@@ -558,7 +576,7 @@ def build(mode="full"):
         "generated": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
         "schema_version": SCHEMA_VERSION,
         "model_version": MODEL_VERSION,
-        "source_note": "Music from tampere-keikat (read-only). Sports/student/theatre/library rows marked SAMPLE are seed data until their adapters are wired.",
+        "source_note": "Music from tampere-keikat (read-only), hockey fixtures from the Liiga game list. Every row comes from a published feed; the SAMPLE seed file is only used with --with-samples.",
         "source_status": status,
         "coverage": {"by_category": dict(by_cat), "by_area": dict(by_area), "total": len(rows)},
         "events": rows,
@@ -606,11 +624,13 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--mode", choices=["sync", "full"], default="full")
     ap.add_argument("--city", default="tampere")
+    ap.add_argument("--with-samples", action="store_true",
+                    help="also publish the SAMPLE rows from data/seed_events.json (never for the live site)")
     args = ap.parse_args()
     if args.city != "tampere":
         log(f"[build] city '{args.city}' not configured yet")
         return 2
-    n = build(args.mode)
+    n = build(args.mode, args.with_samples)
     return 0 if n else 1
 
 
