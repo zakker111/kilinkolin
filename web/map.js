@@ -7,7 +7,7 @@
   const HEAT = ["#f4c20d", "#ee9f18", "#e66f1a", "#d13319", "#960d0a"]; // legend swatches only
   const TILE = 256;
 
-  const S = { events: [], flows: {}, venues: {}, zoneMeta: null, routes: {}, map: null };
+  const S = { events: [], flows: {}, venues: {}, zoneMeta: null, routes: {}, map: null, dotHits: [] };
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
@@ -112,11 +112,13 @@
     _bind() {
       const c = this.canvas;
       c.style.cursor = "grab";
-      let drag = null;
+      let drag = null, down = null;
       c.addEventListener("pointerdown", (e) => {
         drag = { x: e.clientX, y: e.clientY };
+        down = { x: e.clientX, y: e.clientY, t: Date.now() };
         c.setPointerCapture(e.pointerId);
         c.style.cursor = "grabbing";
+        if (S.hideTip) S.hideTip();
       });
       c.addEventListener("pointermove", (e) => {
         if (!drag) return;
@@ -127,9 +129,13 @@
         this.center = { lon: this.lonAt(cx, this._z), lat: this.latAt(cy, this._z) };
         this.schedule();
       });
-      const end = () => { drag = null; c.style.cursor = "grab"; };
+      const end = (e) => {
+        const wasTap = down && e && Math.hypot((e.clientX || 0) - down.x, (e.clientY || 0) - down.y) < 8 && Date.now() - down.t < 700;
+        drag = null; down = null; c.style.cursor = "grab";
+        if (wasTap && this.onTap) this.onTap(e);
+      };
       c.addEventListener("pointerup", end);
-      c.addEventListener("pointercancel", end);
+      c.addEventListener("pointercancel", () => end(null));
       c.addEventListener("wheel", (e) => {
         e.preventDefault();
         const r = c.getBoundingClientRect();
@@ -365,7 +371,7 @@
 
     const agg = S.agg || { legs: new Map(), venues: new Map(), people: 0 };
     const legs = [...agg.legs.values()].sort((a, b) => b.people - a.people);
-    if (!legs.length) return;
+    if (!legs.length) { paintEventDots(ctx, map); return; }
     const total = legs.reduce((sum, l) => sum + l.people, 0) || 1;
     const P = (lat, lon) => map.project(lat, lon);
     const shapes = legs.map((leg) => ({
@@ -409,6 +415,49 @@
       ctx.strokeText(text, p.x + 6, by);
       ctx.fillText(text, p.x + 6, by);
     });
+
+    paintEventDots(ctx, map);
+  }
+
+  /* one dot per event on the chosen day: what is on, and where */
+  const DOT_COLOURS = { gigs: "#cf3a1f", sports: "#1d4ed8", student: "#c07a12", stage: "#7c3aed", culture: "#0f766e", community: "#5b6470" };
+  function paintEventDots(ctx, map) {
+    S.dotHits = [];
+    const taken = {};
+    S.events.filter((ev) => ev.date === S.day).forEach((ev) => {
+      const flow = S.flows[ev.id];
+      if (!flow) return;
+      const v = S.venues[flow.venue_id];
+      if (!v) return;
+      const p = map.project(v.lat, v.lon);
+      const n = taken[v.id] = (taken[v.id] || 0) + 1;
+      if (n > 1) { const a = (n - 1) * 2.1; p.x += Math.cos(a) * 7; p.y += Math.sin(a) * 7; }
+      const colour = DOT_COLOURS[ev.category] || "#4a0f08";
+      ctx.beginPath(); ctx.arc(p.x, p.y, 5.5, 0, Math.PI * 2);
+      ctx.fillStyle = colour; ctx.fill();
+      ctx.lineWidth = 2; ctx.strokeStyle = "rgba(255,255,255,.95)"; ctx.stroke();
+      S.dotHits.push({ x: p.x, y: p.y, ev, venue: v });
+    });
+  }
+
+  function categoryLabel(cat) {
+    return ({ gigs: "Gig", sports: "Sports", student: "Student party", stage: "Stage", culture: "Culture", community: "Community" })[cat] || "Event";
+  }
+
+  function showTipAt(x, y) {
+    const tip = $("eventTip");
+    if (!tip) return;
+    const hit = S.dotHits.find((h) => Math.hypot(h.x - x, h.y - y) < 16);
+    if (!hit) { tip.hidden = true; return; }
+    tip.innerHTML = `<b>${esc(hit.ev.time)} · ${esc(hit.ev.title)}</b>` +
+      `<span>${esc(hit.venue.name)} · ${categoryLabel(hit.ev.category)}${hit.ev.seed ? " · sample" : ""}</span>`;
+    tip.hidden = false;
+    const wrap = $("mapWrap").getBoundingClientRect();
+    const w = Math.min(260, wrap.width - 20);
+    tip.style.width = w + "px";
+    tip.style.left = Math.max(8, Math.min(wrap.width - w - 8, x - w / 2)) + "px";
+    tip.style.top = Math.max(8, y - tip.offsetHeight - 12) + "px";
+    S.tipOpen = true;
   }
 
   /* ------------------------------------------------------------ estimate */
@@ -440,8 +489,8 @@
   /* -------------------------------------------------------------- wiring */
   function wire() {
     const zi = $("zoomIn"), zo = $("zoomOut");
-    if (zi) zi.onclick = () => S.map && S.map.zoomBy(1);
-    if (zo) zo.onclick = () => S.map && S.map.zoomBy(-1);
+    if (zi) zi.onclick = () => { if (S.hideTip) S.hideTip(); if (S.map) S.map.zoomBy(1); };
+    if (zo) zo.onclick = () => { if (S.hideTip) S.hideTip(); if (S.map) S.map.zoomBy(-1); };
     const attrib = $("attrib");
     if (attrib) attrib.innerHTML = `<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">${esc(CFG.TILE_ATTRIBUTION || "© OpenStreetMap contributors")}</a>`;
   }
@@ -480,6 +529,11 @@
 
     S.map = new TileMap($("mapCanvas"));
     S.map.paint = paintFlow;
+    S.map.onTap = (e) => {
+      const r = $("mapCanvas").getBoundingClientRect();
+      showTipAt(e.clientX - r.left, e.clientY - r.top);
+    };
+    S.hideTip = () => { const t = $("eventTip"); if (t) t.hidden = true; };
     S.map.setCenter(61.4978, 23.7610, 13.2);
     S.map.schedule();
 
@@ -494,12 +548,14 @@
     init,
     setDay(day) {
       if (!day) return;
+      if (S.hideTip) S.hideTip();
       S.day = day;
       S.minutes = peakMinute(day);
       refresh();
       return S.minutes;
     },
     setTime(min) {
+      if (S.hideTip) S.hideTip();
       S.minutes = min;
       refresh();
     },
