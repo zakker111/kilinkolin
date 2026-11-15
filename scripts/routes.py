@@ -127,6 +127,24 @@ def wanted_from_flows(venues, zones, hubs):
                 h = hubs.get(hid)
                 if h:
                     legs[key] = ((h["lat"], h["lon"]), here, leg.get("name", key))
+        # A flow that draws straight corridors has no legs[] to copy keys from, so derive
+        # the keys it would use once cached. Without this the cache can never learn about
+        # them: build.py needs the cached route to emit a leg, and this refresh only
+        # fetched keys that already had a leg.
+        for z in flow.get("zones", []):
+            zz = zy.get(z.get("zone_id"))
+            if not zz or hav_km((zz["lat"], zz["lon"]), here) > 9.0:
+                continue
+            key = f"{v['id']}|zone:{zz['id']}"
+            legs.setdefault(key, ((zz["lat"], zz["lon"]), here, f"{v['name']} ← {zz['name']}"))
+        for hid in (v.get("hubs") or [])[:HUB_LIMIT]:
+            h = hubs.get(hid)
+            if not h:
+                continue
+            legs.setdefault(f"{v['id']}|hub:{hid}",
+                            ((h["lat"], h["lon"]), here, f"{v['name']} ← {h['name']}"))
+            legs.setdefault(f"{v['id']}|hub:{hid}:drive",
+                            ((h["lat"], h["lon"]), here, f"{v['name']} ← {h['name']} (transit)"))
     return legs
 
 
