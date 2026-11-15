@@ -16,6 +16,7 @@ import os
 import sys
 import urllib.request
 from collections import Counter, defaultdict
+from zoneinfo import ZoneInfo
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WEB = os.path.join(ROOT, "web")
@@ -121,6 +122,46 @@ def fetch_keikat():
             log("[music] using cached copy")
             return load_json(dest), "CACHED"
         return {"events": [], "generated": None}, "FAILED"
+
+
+LIIGA_URL = "https://liiga.fi/api/v2/games?season={season}&tournament=runkosarja"
+TAMPERE_TEAMS = {"Ilves", "Tappara"}
+
+
+def fetch_liiga():
+    """Ilves/Tappara home fixtures from Liiga's public game list.
+
+    The feed carries no calendar export, but the game list includes the rink,
+    its coordinates and the teams, so home games can be pinned to Nokia Arena.
+    """
+    season = dt.date.today().year + (1 if dt.date.today().month >= 8 else 0)
+    url = LIIGA_URL.format(season=season)
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "kilinkolin/0.8 (+https://github.com/zakker111)"})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            games = json.loads(r.read().decode("utf-8"))
+        if not isinstance(games, list):
+            raise ValueError("unexpected game list")
+        rows = []
+        for g in games:
+            rink = g.get("iceRink") or {}
+            home = (g.get("homeTeam") or {}).get("teamName") or ""
+            away = (g.get("awayTeam") or {}).get("teamName") or ""
+            if home not in TAMPERE_TEAMS or (rink.get("city") or "").upper() != "TAMPERE":
+                continue
+            try:
+                start = dt.datetime.fromisoformat(g["start"].replace("Z", "+00:00")).astimezone(ZoneInfo("Europe/Helsinki"))
+            except (KeyError, ValueError):
+                continue
+            rows.append([
+                start.date().isoformat(), start.strftime("%H:%M"), f"{home} – {away}",
+                "Nokia Arena", "hockey", False, g.get("buyTicketsUrl") or "", "sport", "hockey", 0,
+            ])
+        log(f"[sports] fetched {len(rows)} Tampere home fixtures")
+        return rows, "OK"
+    except Exception as exc:  # noqa: BLE001 - sports feed failure must not kill the build
+        log(f"[sports] fetch failed: {exc}")
+        return [], f"FAILED: {exc}"
 
 
 # ------------------------------------------------------------- normalising
@@ -421,7 +462,8 @@ def build(mode="full"):
 
     feed, music_status = fetch_keikat()
     seed = load_json(os.path.join(ROOT, "data", "seed_events.json"))
-    status = {"music": music_status, "seed": "OK"}
+    sports_rows, sports_status = fetch_liiga()
+    status = {"music": music_status, "seed": "OK", "sports": sports_status}
 
     events = []
     unmatched = Counter()
@@ -448,7 +490,7 @@ def build(mode="full"):
             "kind": "music", "seed": False,
         })
 
-    for row in seed.get("events", []):
+    for row in seed.get("events", []) + sports_rows:
         date, time_s, title, venue_raw, genre, free, url, kind, sub, is_seed = row[:10]
         venue = resolve_venue(venue_raw, alias_idx, VENUES) or next(v for v in VENUES if v["id"] == "tampere_muu")
         hour = int(time_s.split(":")[0]) if time_s and ":" in time_s else None
