@@ -31,8 +31,16 @@
 - [x] Event dots: gigs red, sports blue, student amber; tap a dot for title, time and venue
 - [x] Phone layout: stacked controls, larger touch targets, viewport-sized map, no sideways scroll
 - [x] Sports adapter: Liiga public game list, Ilves/Tappara home games at Nokia Arena
-- [x] Interaction polish: filled hour track, eased map zoom, map reveal, selected-day scroll,
-      focus rings and reduced-motion support
+- [x] Feed end times: the Liiga adapter passes the playing time when a game carries one, so the
+      hockey egress curve uses a real end instead of the 150-minute default
+- [x] Sample data removed from the live build — `--with-samples` is the only way to load
+      `data/seed_events.json`, and `validate.py` fails if any published row looks like a placeholder
+- [x] Right-hand panel: the chosen day's events in start order, the one under the pointer expanded,
+      rows and map dots highlighting each other, "occurring now" marked from the chosen hour
+- [x] Fixed: the legend markup held a duplicated swatch block, and the swatch styles only loaded
+      under the phone media query, so the desktop legend lost a row
+- [x] Fixed: hovering a dot never showed anything (only taps did) and a tooltip could stay stuck
+      over an empty patch of map
 
 ## Next
 
@@ -47,7 +55,7 @@
 - [ ] `feeds/ticketmaster.py` — Discovery API, `countryCode=FI` (needs free key)
 - [ ] `feeds/longtail.py` — Tampere-talo, Nokia Arena, Särkänniemi, Vapriikki,
       TTT/Komediateatteri/Telakka, seurakunnat, markets
-- [ ] Replace every `SAMPLE` row in `data/seed_events.json` with real adapter output
+- [ ] Retire `data/seed_events.json` entirely once a student and a culture/venue adapter exist
 
 ### Model
 - [ ] `calibration.py` — scrape reported league attendance, fit fill factors, publish backtest error
@@ -69,12 +77,13 @@
 
 ## Known issues
 
-- **Sports/student/theatre/library rows are `SAMPLE` placeholders.** Clearly badged in the UI.
+- **Only music and Liiga hockey are published.** Student, stage, culture and community adapters are
+  still unwired, and their `SAMPLE` rows stay out of the build, so those categories are empty.
 - **Coordinates are approximate** (100–300 m) for venues not individually verified.
 - **Mode split is a distance heuristic**, not real routes. Treat shares as indicative.
 - **`tampere-keikat` feed only contains music**, and only future events.
 - **liiga.fi schedule** is now read from `api/v2/games`; the contract is undocumented and may move.
-- **Student parties are still `SAMPLE`** — no dependable public Tampere feed found yet.
+- **Student parties are not published** — no dependable public Tampere feed found yet.
 - **Tile provider policy**: the default OSM tile service is fine for a small site but has no
   SLA; swap `TILE_URL` for a paid/self-hosted provider if traffic grows.
 - **Corridors are schematic** straight-ish lines, not street routing.
