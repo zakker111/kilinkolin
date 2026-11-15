@@ -24,7 +24,7 @@
     return rows.map((r) => ({
       // the feed omits a start time for a few events; count those at a typical 19:00 start
       date: r[0], time: r[1] || "19:00", title: r[2], venue: r[3],
-      id: r[7], seed: !!r[13]
+      id: r[7], category: r[9], seed: !!r[13]
     })).filter((e) => e.id);
   }
 
