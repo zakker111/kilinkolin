@@ -357,7 +357,7 @@ def legs_for(venue, zone_rows, routes, hub_names, hub_kinds, attendance_mid):
         elif zone_key in routes:
             key = zone_key
         elif hub_key in routes:
-            key, label = hub_key, hubs[:0] and None or hub_names.get(hub_id, row["name"])
+            key, label = hub_key, hub_names.get(hub_id, row["name"])
         if key is None:
             continue
         rec = agg.setdefault(key, {"share": 0.0, "modes": defaultdict(float), "name": label,
