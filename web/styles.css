@@ -21,7 +21,8 @@ a{color:inherit;}
 .hero{position:relative;z-index:1;max-width:1240px;margin:0 auto;padding:16px 16px 10px;
   display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
 .eyebrow{width:100%;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.18em;
-  text-transform:uppercase;color:var(--teal);display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;}
+  text-transform:uppercase;color:var(--teal);display:flex;justify-content:flex-start;align-items:baseline;
+  gap:10px;flex-wrap:wrap;}
 .build-badge{font-size:9px;letter-spacing:.08em;text-transform:none;color:var(--paper-dim);opacity:.8;}
 h1{font-family:'Bebas Neue',sans-serif;letter-spacing:.03em;font-size:clamp(30px,4.2vw,44px);line-height:1;margin:0;color:var(--paper);}
 h1 em{font-style:normal;color:var(--teal);}
