@@ -2,6 +2,21 @@
 
 ## App
 
+### 0.9.0 — 2026-11-15
+Dots for what is on, and a phone-first layout.
+
+- Added: one dot per event on the chosen day, coloured by kind — gigs red, sports blue,
+  student parties amber — so the map says what is happening where without a listing.
+- Added: tap or click a dot for the event name, start time and venue. Estimates stay estimates;
+  the dots are the only place a title appears.
+- Added: Liiga sports adapter (`fetch_liiga` in `scripts/build.py`) — Ilves and Tappara home
+  fixtures from the public Liiga game list, pinned to Nokia Arena with the rink's own coordinates.
+  Away games are excluded; the feed refreshes on every scheduled rebuild.
+- Changed: phone layout stacks the day strip and hour control, enlarges touch targets, trims the
+  legend and sizes the map to the viewport so nothing scrolls sideways.
+- Note: student rows are still `SAMPLE` placeholders — no dependable public Tampere student feed
+  was found (the TREY calendar is a JS app over a Strapi API that refused unauthenticated reads).
+
 ### 0.8.0 — 2026-11-15
 Traffic both ways.
 
@@ -162,13 +177,15 @@ First working build.
 - `venues`: 1 — 46 venues, 12 hubs, approximate coordinates flagged per venue.
 - `zones`: 1 — 26 Tampere districts + 13 surrounding/Pirkanmaa bands.
 - Calibration dataset: **none yet** (priors only) — backtest pending.
-- Upstream feed: `tampere-keikat` @ 2026-11-14 12:05 UTC snapshot.
+- Upstream feeds: `tampere-keikat` @ 2026-11-14 12:05 UTC snapshot; Liiga game list
+  (`liiga.fi/api/v2/games`) filtered to Ilves/Tappara home games in Tampere.
+- `sports` rows now mix the Liiga adapter with the remaining `SAMPLE` placeholders.
 - Adapted interface: `tampere-keikat` @ `4be498d` (MIT).
 
 ## Versioning rules
 
 - **MAJOR** — the UI can no longer read the data (row indices changed, file removed).
-- **MINOR** — new source, category, view or capability.
+- **MINOR** — new source, category, view or model capability.
 - **PATCH** — fixes, copy, styling, data corrections.
 
 Every build stamps `generated`, `schema_version` and `model_version` into `web/data.json`
