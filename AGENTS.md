@@ -4,9 +4,10 @@ Working notes for anyone (human or agent) changing this repo.
 
 ## What this is
 
-A static site: one **estimated crowd-flow heat map** for Tampere. The only controls are a day and
-an hour; the map aggregates every event that day into the streets people are estimated to be on
-at that moment, plus the number on the move. There are no event listings by design.
+A static site: one **estimated crowd-flow heat map** for Tampere. The controls are a day and an
+hour; the map aggregates every event that day into the streets people are estimated to be on at
+that moment, plus the number on the move. A right-hand panel names what is on that day and shows
+the event under the pointer; hovering a dot on the map names the same event there.
 Python builds the data in GitHub Actions; the browser only fetches JSON, tiles and renders.
 The workflow refreshes every day at 05:15 UTC and does a guaranteed full rebuild on Sundays at
 04:00 UTC: new events are fetched, their missing street routes are added, the model is rebuilt,
@@ -36,7 +37,7 @@ Not a fork of Tampere Keikat — it reads that project's published feed. See `NO
 ```
 web/            index.html, app.js, map.js, styles.css, config.js, data.json, geo/*.json
 scripts/        build.py (pipeline), validate.py (gate)
-data/           keikat.json (feed snapshot), seed_events.json (SAMPLE rows)
+data/           keikat.json (feed snapshot), seed_events.json (SAMPLE rows, never published)
 registry/       venues.json, zones.json  (hand-maintained)
 .github/        workflows/build.yml
 ```
@@ -50,6 +51,12 @@ python3 scripts/build.py --mode full      # fetch, normalise, model, write web/*
 python3 scripts/validate.py               # gate: schema + conservation + coverage
 python3 -m http.server -d web 3003        # local preview at :3003
 ```
+
+## Publishers of data must be real
+
+`data/seed_events.json` holds SAMPLE placeholders and is **not** read by the normal build: only
+`python3 scripts/build.py --with-samples` loads it, and `validate.py` fails if `source_status.seed`
+is not `OFF` or if a published title contains `SAMPLE`. Never ship a placeholder to the live site.
 
 ## Data contracts
 
@@ -67,8 +74,8 @@ Indices 0–6 are frozen (older consumers read them positionally). Append only.
 `arrival[]` and `egress[]` 15-minute slices.
 
 `legs[]` is what the map draws: `{key, name, share, people, mode, km, min}`. `key` resolves into
-`web/geo/routes.json`, a cache of real pedestrian geometry (`venue|hub:<id>` or `venue|zone:<id>`),
-fetched by `scripts/routes.py` from the FOSSGIS OSRM foot instance and
+`web/geo/routes.json`, a cache of real pedestrian geometry (`venue|hub:<id>` or
+`venue|zone:<id>`), fetched by `scripts/routes.py` from the FOSSGIS OSRM foot instance and
 committed under `registry/routes.json`. Never call a router at runtime and never invent geometry:
 missing cache entries fall back to the straight `corridors[]` lines.
 
@@ -86,5 +93,6 @@ Every event must resolve to a venue in `registry/venues.json`.
 - `validate.py` exits 0.
 - `git diff` contains no key, no `vendor/` churn, no build output outside `web/`.
 - `TODO.md` updated; `VERSIONS.md` entry if behaviour or schema changed.
+- `AGENTS.md` updated when the layout, controls or data contract change.
 - If the UI changed, load it locally and check that picking a day and dragging the hour repaints
   the heat over the tiles and that the estimate box agrees with the map.
