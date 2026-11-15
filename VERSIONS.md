@@ -2,6 +2,26 @@
 
 ## App
 
+### 0.11.0 — 2026-11-15
+Student parties from Kide, on their real addresses.
+
+- Added: `scripts/feeds/kide.py`, the first adapter in a `scripts/feeds/` package. It reads Kide's
+  public product list for Tampere (`api.kide.app/api/products?city=Tampere`, no key) and returns the
+  event name, the organiser, the place and a **real** start and end time — the student platform
+  publishes both, so a sitsit or a gaala now has a real egress curve instead of the 300-minute
+  default.
+- Added: `kide_rows()` in `build.py` places each product on a venue from `registry/venues.json` by
+  name or alias and publishes it as the `student` category. A product whose place is not a registry
+  venue is **dropped and logged**, never placed on a guessed coordinate: 6 of today's 67 products
+  land on a real address (Telakka, Klubi, Tampere-talo, Hakametsän jäähalli), 61 are left out with
+  their place names printed in the build log.
+- Changed: `source_status` gained a `student` key alongside `music`, `sports` and `seed`, so a broken
+  Kide feed reports `FAILED` there instead of silently shrinking the day.
+- Fixed: a malformed product (or a `minPrice` money object instead of a number) no longer loses the
+  whole source — the adapter skips that one row.
+- Kept: `seed` is still `OFF` and no `SAMPLE` row is published; `validate.py` still refuses one.
+- Note: everything else on the page remains an estimate from the flow model.
+
 ### 0.10.0 — 2026-11-15
 Only real events, and the day's programme beside the map.
 
@@ -197,8 +217,10 @@ First working build.
 - `zones`: 1 — 26 Tampere districts + 13 surrounding/Pirkanmaa bands.
 - Calibration dataset: **none yet** (priors only) — backtest pending.
 - Upstream feeds: `tampere-keikat` @ 2026-11-14 12:05 UTC snapshot; Liiga game list
-  (`liiga.fi/api/v2/games`) filtered to Ilves/Tappara home games in Tampere.
-- `sports` rows come from the Liiga adapter only; `SAMPLE` placeholders are no longer published.
+  (`liiga.fi/api/v2/games`) filtered to Ilves/Tappara home games in Tampere; Kide public product
+  list (`api.kide.app/api/products?city=Tampere`) for student events.
+- `sports` rows come from the Liiga adapter and `student` rows from the Kide adapter; `SAMPLE`
+  placeholders are no longer published. Kide rows carry a real end minute when the product does.
 - Adapted interface: `tampere-keikat` @ `4be498d` (MIT).
 
 ## Versioning rules
