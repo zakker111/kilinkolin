@@ -18,6 +18,9 @@ import urllib.request
 from collections import Counter, defaultdict
 from zoneinfo import ZoneInfo
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from feeds import kide as kide_feed  # noqa: E402  (adapter lives beside this file)
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WEB = os.path.join(ROOT, "web")
 GEO = os.path.join(WEB, "geo")
@@ -448,6 +451,31 @@ def summarise_modes(zone_rows, cls="B"):
     return [{"mode": m, "share": round(v / total, 3)} for m, v in sorted(agg.items(), key=lambda kv: -kv[1])]
 
 
+KIDE_SUBS = (("sitsit", "sitsit"), ("appro", "party"), ("sauna", "sauna"),
+             ("treenit", "sports"), ("treeni", "sports"), ("turnaus", "sports"),
+             ("teatteri", "culture"), ("näytelm", "culture"))
+
+
+def kide_rows(alias_idx):
+    """Kide products placed on a real registry venue; anything unplaceable is dropped."""
+    events, status = kide_feed.fetch()
+    rows, skipped = [], Counter()
+    for ev in events:
+        venue = resolve_venue(ev["place"], alias_idx, VENUES)
+        if not venue or venue["id"] == "tampere_muu":
+            skipped[ev["place"] or "(no place)"] += 1
+            continue
+        title_l = ev["title"].lower()
+        sub = next((s for key, s in KIDE_SUBS if key in title_l), "party")
+        end_min = clock_minutes(ev["time"]) + ev["minutes"] if ev["minutes"] else None
+        rows.append([ev["date"], ev["time"], ev["title"], venue["name"], "student",
+                     1 if ev["free"] else 0, "", "student", sub, 0, end_min])
+    if skipped:
+        log(f"[kide] {len(rows)} placed, {sum(skipped.values())} dropped for an unknown venue: "
+            + ", ".join(f"{k}×{v}" for k, v in skipped.most_common(4)))
+    return rows, status
+
+
 # ------------------------------------------------------------------- build
 ZONES = []
 VENUES = []
@@ -474,7 +502,9 @@ def build(mode="full", with_samples=False):
     # data/seed_events.json holds SAMPLE placeholders only; they are never published
     seed = load_json(os.path.join(ROOT, "data", "seed_events.json")) if with_samples else {"events": []}
     sports_rows, sports_status = fetch_liiga()
-    status = {"music": music_status, "seed": "ON" if with_samples else "OFF", "sports": sports_status}
+    student_rows, student_status = kide_rows(alias_idx)
+    status = {"music": music_status, "seed": "ON" if with_samples else "OFF",
+              "sports": sports_status, "student": student_status}
 
     events = []
     unmatched = Counter()
@@ -501,7 +531,7 @@ def build(mode="full", with_samples=False):
             "kind": "music", "seed": False,
         })
 
-    for row in seed.get("events", []) + sports_rows:
+    for row in seed.get("events", []) + sports_rows + student_rows:
         # sports rows may carry an explicit end minute from the Liiga adapter now
         date, time_s, title, venue_raw, genre, free, url, kind, sub, is_seed, *rest = row
         end_min_from_feed = rest[0] if rest and rest[0] is not None else None
@@ -576,7 +606,7 @@ def build(mode="full", with_samples=False):
         "generated": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
         "schema_version": SCHEMA_VERSION,
         "model_version": MODEL_VERSION,
-        "source_note": "Music from tampere-keikat (read-only), hockey fixtures from the Liiga game list. Every row comes from a published feed; the SAMPLE seed file is only used with --with-samples.",
+        "source_note": "Music from tampere-keikat (read-only), hockey fixtures from the Liiga game list, student events from Kide. Every row comes from a published feed; the SAMPLE seed file is only used with --with-samples.",
         "source_status": status,
         "coverage": {"by_category": dict(by_cat), "by_area": dict(by_area), "total": len(rows)},
         "events": rows,
