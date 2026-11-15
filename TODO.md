@@ -28,6 +28,9 @@
       updates keep the street heat instead of straight lines
 - [x] Every event contributes: no-time rows count at 19:00, daytime and after-midnight events are
       reachable on the scrubber, and arrival windows match the chosen minute
+- [x] Event dots: gigs red, sports blue, student amber; tap a dot for title, time and venue
+- [x] Phone layout: stacked controls, larger touch targets, viewport-sized map, no sideways scroll
+- [x] Sports adapter: Liiga public game list, Ilves/Tappara home games at Nokia Arena
 
 ## Next
 
@@ -35,8 +38,10 @@
 - [ ] `feeds/city_events.py` — walk `tapahtumat.tampere.fi` topic IDs (library topic
       `677f933068bf7f5f79171c68` verified), plus `tampere.fi/api/eventz-today/<paragraph>` sections
 - [ ] `feeds/students.py` — treykalenteri (HTML, no WP REST), Tamko, Yo-talo, Kide
-- [ ] `feeds/sports.py` — Liiga (find ICS/JSON behind the schedule app), basket.fi,
-      pesistulokset.fi, F-liiga, Veikkausliiga
+- [x] Sports: Liiga JSON (Ilves/Tappara home games) lives in `fetch_liiga` in `build.py`
+- [ ] Sports: basket.fi, pesistulokset.fi, F-liiga, Veikkausliiga adapters
+- [ ] Student: still blocked — TREY calendar is a JS app over an unauthenticated Strapi API;
+      Kide's public API has no Tampere locality filter
 - [ ] `feeds/ticketmaster.py` — Discovery API, `countryCode=FI` (needs free key)
 - [ ] `feeds/longtail.py` — Tampere-talo, Nokia Arena, Särkänniemi, Vapriikki,
       TTT/Komediateatteri/Telakka, seurakunnat, markets
@@ -66,7 +71,8 @@
 - **Coordinates are approximate** (100–300 m) for venues not individually verified.
 - **Mode split is a distance heuristic**, not real routes. Treat shares as indicative.
 - **`tampere-keikat` feed only contains music**, and only future events.
-- **liiga.fi schedule is a JS app** — needs endpoint discovery or a headless browser in CI.
+- **liiga.fi schedule** is now read from `api/v2/games`; the contract is undocumented and may move.
+- **Student parties are still `SAMPLE`** — no dependable public Tampere feed found yet.
 - **Tile provider policy**: the default OSM tile service is fine for a small site but has no
   SLA; swap `TILE_URL` for a paid/self-hosted provider if traffic grows.
 - **Corridors are schematic** straight-ish lines, not street routing.
