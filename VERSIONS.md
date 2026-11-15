@@ -2,6 +2,20 @@
 
 ## App
 
+### 0.11.1 — 2026-11-15
+Every published event sits on a venue with a real address.
+
+- Fixed: one gig had `Ilmainen` ("free") in the venue field and its street address folded into the
+  title, so it was pinned to the generic `tampere_muu` fallback. `resolve_by_address()` now accepts a
+  street name with a house number found in the row and places the event on that registry venue —
+  a real address, not a guess.
+- Fixed: `registry/venues.json` listed `ilmainen` as an alias of the generic fallback venue, which
+  is how that row lost its address. Removed.
+- Added: Finlaysonin kirkko, Puuvillatehtaankatu 2 (`61.5022, 23.7550`, OpenStreetMap), capacity 220
+  as published by the Tampereen seurakunnat, so concert rows at that address have a venue.
+- Note: all 122 published events — 71 gigs, 45 hockey fixtures, 6 student events — now resolve to one
+  of 26 venues, each with an address and coordinates; the map draws a dot for every one of them.
+
 ### 0.11.0 — 2026-11-15
 Student parties from Kide, on their real addresses.
 
@@ -213,7 +227,7 @@ First working build.
   supplies a real end minute when the game list carries playing time.
 - `events_schema`: **2** — row indices 0–6 frozen; 7–14 appended.
 - `flows_schema`: **1** — attendance, interest, zones, modes, corridors, arrival, egress.
-- `venues`: 1 — 46 venues, 12 hubs, approximate coordinates flagged per venue.
+- `venues`: 1 — 48 venues, 12 hubs, approximate coordinates flagged per venue.
 - `zones`: 1 — 26 Tampere districts + 13 surrounding/Pirkanmaa bands.
 - Calibration dataset: **none yet** (priors only) — backtest pending.
 - Upstream feeds: `tampere-keikat` @ 2026-11-14 12:05 UTC snapshot; Liiga game list
