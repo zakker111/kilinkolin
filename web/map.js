@@ -309,18 +309,28 @@
     return v;
   }
 
-  /* each arrival entry is the share arriving in the 15 minutes starting at its `t`:
-     at 16:45 an 18:00 start uses the slot at -90, i.e. 16:30-16:45, not a fraction
-     of a slot boundary that never lands on the chosen minute. */
-  function arrivalShare(curve, off) {
+  /* each curve entry is a share spread over its slot (15 minutes unless the build says
+     otherwise), so a chosen minute can take a fraction of the slot instead of snapping
+     to a boundary it never lands on. */
+  function sliceShare(curve, from, to) {
     let sum = 0;
-    (curve || []).forEach((c) => { if (c.t >= off - 15 && c.t < off) sum += c.share; });
+    (curve || []).forEach((c) => {
+      const span = c.span || 15;
+      const lo = Math.max(c.t, from), hi = Math.min(c.t + span, to);
+      if (hi > lo) sum += c.share * (hi - lo) / span;
+    });
     return Math.min(1, Math.max(0, sum));
   }
 
-  /* how many of this event's people are on a route in the 15 minutes before `now` */
+  /* people on a route in the 15 minutes up to `now`: travelling in before the start,
+     or heading home after the estimated end */
   function enRoute(flow, now, startMin) {
-    return Math.max(0, flow.attendance.mid) * arrivalShare(flow.arrival, now - startMin);
+    const mid = Math.max(0, flow.attendance.mid);
+    const arrive = sliceShare(flow.arrival, now - startMin - 15, now - startMin);
+    // old cached flows have no end; they simply count arrivals until the next build
+    let leave = 0;
+    if (flow.end != null) leave = sliceShare(flow.egress, now - flow.end - 15, now - flow.end);
+    return mid * Math.min(1, arrive + leave);
   }
 
   function aggregate() {
