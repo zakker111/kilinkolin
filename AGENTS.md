@@ -36,7 +36,7 @@ Not a fork of Tampere Keikat — it reads that project's published feed. See `NO
 
 ```
 web/            index.html, app.js, map.js, styles.css, config.js, data.json, geo/*.json
-scripts/        build.py (pipeline), validate.py (gate)
+scripts/        build.py (pipeline), validate.py (gate), routes.py (street geometry), feeds/ (adapters)
 data/           keikat.json (feed snapshot), seed_events.json (SAMPLE rows, never published)
 registry/       venues.json, zones.json  (hand-maintained)
 .github/        workflows/build.yml
@@ -79,7 +79,10 @@ Indices 0–6 are frozen (older consumers read them positionally). Append only.
 committed under `registry/routes.json`. Never call a router at runtime and never invent geometry:
 missing cache entries fall back to the straight `corridors[]` lines.
 
-Every event must resolve to a venue in `registry/venues.json`.
+Every event must resolve to a real venue: a registry venue, or a venue generated from a feed's own
+published coordinates (the city calendar supplies both the point and the address). Generated
+venues live in `web/geo/venues.json` with an `address`; they are never hand-written into the
+registry and never guessed.
 
 ## Adding a feed adapter
 

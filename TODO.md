@@ -51,12 +51,23 @@
 - [x] Sunday retry cron (`0 6 * * 0`) after the weekly 04:00 rebuild
 - [x] A total feed failure keeps the last good data: the build refuses to write an empty
       map and exits non-zero, so the workflow stops before committing or deploying
+- [x] City calendar adapter: `scripts/feeds/city_events.py` publishes stage, culture, library
+      and community events (217 today) with the calendar's own coordinates and addresses
+- [x] Calendar locations outside the registry become real generated venues (published point,
+      address, nearest district and hub) instead of falling back to `tampere_muu`
+- [x] Far venues (Kangasala, Nokia, Hämeenkyrö) fall back to their nearest districts, so they
+      no longer produce an event with no origin zones
 
 ## Next
 
 ### Feeds (highest value)
-- [ ] `feeds/city_events.py` — walk `tapahtumat.tampere.fi` topic IDs (library topic
-      `677f933068bf7f5f79171c68` verified), plus `tampere.fi/api/eventz-today/<paragraph>` sections
+- [x] `feeds/city_events.py` — the whole public calendar in one call
+      (`api/search/internal-content-fetch?lang=fi&country=FI&q=`), which also covers the library
+      programme; topic-by-topic walking is no longer needed
+- [ ] City calendar: fetch the remaining legs so every calendar venue draws streets rather than
+      fallback corridors (59 of 147 flows had geometry after the first seeded run)
+- [ ] City calendar: per-event size signal, so a library talk and a Tampere-talo gala do not both
+      read as the small-venue floor
 - [x] Student: `scripts/feeds/kide.py` reads Kide's public Tampere product list (real start and
       end times) and `kide_rows()` in `build.py` places each product on a registry venue
 - [ ] Student: add the venues Kide names that the registry does not have yet (Laulumaja, Save File,
@@ -80,6 +91,8 @@
 - [ ] Event scale: a student practice at an arena currently inherits the arena's capacity, so the
       estimate reads in the thousands. Needs a per-event size signal (ticket stock, practice /
       treenit keyword) before that figure means anything.
+- [ ] Small-venue events (library talks, workshops) use the 20-person floor; a size signal from the
+      calendar's `maxParticipants` should feed the fill prior instead
 
 ### Map
 - [ ] District boundary polygons instead of centroid blobs
@@ -102,15 +115,27 @@
   runs at Hakametsän jäähalli, so the fill prior multiplies a several-thousand-seat capacity and the
   page estimates thousands of people for a practice. The range is published with `≈` and the same
   caveat as every other figure, but treat it as an upper bound until the model has a size signal.
-- **Music, Liiga hockey and Kide student events are published.** Stage, culture and community
-  adapters are still unwired, and their `SAMPLE` rows stay out of the build, so those categories
-  are empty.
-- **Coordinates are approximate** (100–300 m) for venues not individually verified.
+- **Calendar venues have no capacity.** The city calendar publishes a point and an address, not a
+  hall size, so those events sit on the model's small-venue floor unless the listing carries
+  `maxParticipants`. Big calendar events at registry venues (Tampere-talo, Vapriikki, Nokia Arena)
+  keep their real capacity.
+- **Calendar routes are still filling in.** New venues get their street legs from the bounded CI
+  fetch (700 legs per run), so early flows use the straight fallback corridors until the cache
+  catches up.
+- **Music, Liiga hockey, Kide student events and the city calendar are published.** Stage, culture
+  and community rows come only from the calendar plus the registry venues it names, so a venue that
+  lists nowhere else can still be missing.
+- **Coordinates are approximate** (100–300 m) for venues not individually verified; calendar venues
+  use the calendar's own point.
 - **Mode split is a distance heuristic**, not real routes. Treat shares as indicative.
 - **`tampere-keikat` feed only contains music**, and only future events.
 - **liiga.fi schedule** is now read from `api/v2/games`; the contract is undocumented and may move.
 - **Kide's API** is likewise undocumented (`api.kide.app/api/products?city=Tampere`); a shape
   change shows up as `source_status.student` = `FAILED`, not as a broken page.
+- **The city calendar API** is undocumented too
+  (`api/search/internal-content-fetch?lang=fi&country=FI&q=`), needs both parameters and the
+  calendar's own host, and returns the whole calendar in one ~3 MB response. A shape change shows
+  up as `source_status.culture` = `FAILED`.
 - **Tile provider policy**: the default OSM tile service is fine for a small site but has no
   SLA; swap `TILE_URL` for a paid/self-hosted provider if traffic grows.
 - **Corridors are schematic** straight-ish lines, not street routing.
@@ -124,4 +149,5 @@
 - Corridor geometry comes from our own zone→hub→venue model, never stored Google Directions content.
 - Estimates are never written back as observations.
 - A feed's place string is never turned into coordinates by guesswork: if the venue registry does
-  not already hold that venue and its address, the event is dropped and logged.
+  not already hold that venue and its address, the event is dropped and logged — except when the
+  feed itself publishes the point and the address, which is what the city calendar does.
