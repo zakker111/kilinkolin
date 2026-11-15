@@ -59,6 +59,13 @@
       no longer produce an event with no origin zones
 - [x] Route cache complete: every venue has a hub, every flow draws real street geometry
       (0 corridor-only flows, 0 legs under 50 m; 3,150 legs over 7,050 km)
+- [x] Student venues: 21 student-party venues registered on their OpenStreetMap address points
+      (Laulumaja, Save File, TAMK, Pii-klubi, Pursiseura, Juhlatalo Tapiola, Kamula, Ylioppilas-
+      teatteri and the nightclubs Kide uses), so published student parties went 6 → 38 of 67
+- [x] Gig addresses: 13 registry venues carried a district name where the address belongs and sat
+      up to 3 km off; every one now has its street address and address point (Terassi Pub Yläkerta
+      alone was 10 gigs, plotted in the city centre instead of Pispalan valtatie 39)
+- [x] The panel and the row list show `venue · address`, so a dot's address is visible on the site
 
 ## Next
 
@@ -70,14 +77,15 @@
       read as the small-venue floor
 - [x] Student: `scripts/feeds/kide.py` reads Kide's public Tampere product list (real start and
       end times) and `kide_rows()` in `build.py` places each product on a registry venue
-- [ ] Student: add the venues Kide names that the registry does not have yet (Laulumaja, Save File,
-      Ankkuri, Tampereen Yliopistoteatteri…), each with a real address and a published capacity —
-      61 of 67 current products are dropped for an unknown place rather than guessed
-- [ ] `feeds/students.py` — treykalenteri (HTML, no WP REST), Tamko, Yo-talo
-- [x] Sports: Liiga JSON (Ilves/Tappara home games) lives in `fetch_liiga` in `build.py`
+- [x] Student: the venues Kide names are now in the registry with OSM address points (Laulumaja,
+      Save File, Tampereen Ylioppilasteatteri, Juhlatalo Tapiola, Pursiseura, Pii-klubi, Kamula,
+      TAMK, YTHS-sauna, Mixei, ZBase, Ilona, Galaxie, Bricks, Kaijakka, Onda, Sherlock Holmes,
+      Kultainen Apina, Koskikeskus, Messukylän työväentalo, Hatanpään soutupaviljonki)
+- [ ] Student: Ankkuri (3 products), Antura, Megazone, CLINT and Bar Tullari publish no street
+      address anywhere, so those products stay dropped — a real address or nothing
+- [ ] `feeds/trey.py` — treykalenteri.fi serves a JS app over HTML with no public JSON (the
+      WordPress REST and Tribe endpoints return the app shell), so it would need a headless parse
 - [ ] Sports: basket.fi, pesistulokset.fi, F-liiga, Veikkausliiga adapters
-- [x] Student: Kide's public product list works with `?city=Tampere` (67 future products, 11 of
-      them naming a known venue) and is now the `student` source
 - [ ] `feeds/ticketmaster.py` — Discovery API, `countryCode=FI` (needs free key)
 - [ ] `feeds/longtail.py` — Tampere-talo, Nokia Arena, Särkänniemi, Vapriikki,
       TTT/Komediateatteri/Telakka, seurakunnat, markets
@@ -109,7 +117,7 @@
 ## Known issues
 
 - **Student events are matched, not geocoded.** Kide gives a place name but no coordinates, so a
-  product is only published when its place is already a registry venue; today that is 6 of 67. The
+  product is only published when its place is already a registry venue; today that is 38 of 67. The
   rest are dropped and logged, never placed on a guessed address.
 - **A student event at a big venue inherits that venue's capacity.** `TTO x PIRATE Kyykkätreenit`
   runs at Hakametsän jäähalli, so the fill prior multiplies a several-thousand-seat capacity and the
@@ -119,13 +127,19 @@
   hall size, so those events sit on the model's small-venue floor unless the listing carries
   `maxParticipants`. Big calendar events at registry venues (Tampere-talo, Vapriikki, Nokia Arena)
   keep their real capacity.
+- **New venues get their capacity from the class prior.** Laulumaja, Save File, the nightclubs and
+  the rest carry a `gig` capacity nobody publishes (150-300 seats); treat those figures as priors.
+- **Four places still have no house number on the map.** Monttu (its address is not published
+  anywhere), Bricks (Hämeenkatu, no number in OSM), Valkeakosken kesäteatteri, and the calendar
+  venues that are parks or squares by nature (Keskustori, Hämeenpuisto). They keep an approximate
+  point and `approx: true`.
 - **Calendar routes are seeded by CI.** New venues get their legs from the bounded fetch in the
   workflow (`--max 1500`); until that runs, a brand-new venue uses the straight fallback.
 - **Music, Liiga hockey, Kide student events and the city calendar are published.** Stage, culture
   and community rows come only from the calendar plus the registry venues it names, so a venue that
   lists nowhere else can still be missing.
-- **Coordinates are approximate** (100–300 m) for venues not individually verified; calendar venues
-  use the calendar's own point.
+- **Coordinates are approximate** (100–300 m) for venues not individually verified; the venues
+  added in 0.12.2 use their OpenStreetMap address point.
 - **Mode split is a distance heuristic**, not real routes. Treat shares as indicative.
 - **`tampere-keikat` feed only contains music**, and only future events.
 - **liiga.fi schedule** is now read from `api/v2/games`; the contract is undocumented and may move.
@@ -149,3 +163,5 @@
 - A feed's place string is never turned into coordinates by guesswork: if the venue registry does
   not already hold that venue and its address, the event is dropped and logged — except when the
   feed itself publishes the point and the address, which is what the city calendar does.
+- A registry venue's address is a **street address from OpenStreetMap**, never a district name; the
+  UI shows it, so a vague address is a visible bug rather than a private shortcut.

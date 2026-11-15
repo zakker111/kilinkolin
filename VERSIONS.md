@@ -2,6 +2,40 @@
 
 ## App
 
+### 0.12.2 — 2026-11-15
+Student parties and gigs sit on their real street addresses, and the site shows them.
+
+- Added: 21 student and student-night venues the Kide feed names, each on its OpenStreetMap address
+  point — Laulumaja (Takojankatu 1 C), Save File (Aleksis Kiven katu 24), Tampereen Ylioppilasteatteri
+  (Itsenäisyydenkatu 12–14), Juhlatalo Tapiola (Karhunkatu 71), Tampereen Pursiseura
+  (Kekkosenkatu 10), Pii-klubi (Yliopistonkatu 58 B), Kamula (Mustanlahdenkatu 18), TAMK pääkampus
+  (Kuntokatu 3), YTHS-sauna (Kalevantie 3 C), Nightclub Mixei, Viihdekeskus ZBase, Viihdemaailma
+  Ilona, Galaxie Center, Bricks, Kaijakka, Onda, Sherlock Holmes, Pub Kultainen Apina, Koskikeskus,
+  Messukylän työväentalo and Hatanpään soutupaviljonki.
+- Changed: published student parties 6 → 38 of the 67 future Kide products. A product is placed only
+  when its place matches a venue in the registry; the rest are dropped and logged, never pinned to a
+  guessed point (Ankkuri, Antura, Megazone and CLINT publish no street address at all).
+- Fixed: 13 registry venues carried a district name ("Keskusta") where the address belongs, with
+  points up to 3 km off. Terassi Pub Yläkerta is at Pispalan valtatie 39 — the upstairs of
+  Vastavirta-Klubi, not the city centre — which alone corrects 10 published gigs. Others corrected:
+  Astor (Aleksis Kiven katu 26), Puisto (Hämeenkatu 14 A), Rosendahl (Pyynikintie 13, the Scandic
+  hotel), Ilves Bar & Night (Hatanpään valtatie 1), Myllärit (Åkerlundinkatu 4), Tiiliholvi
+  (Kauppakatu 10), Huurre (Sammonkatu 46), Salhojankadun Pub (Salhojankatu 29), Katubaari Axu
+  (Ilmarinkatu 47), Paapan Kapakka (Koskikatu 9), Kulttuurikeskus Maanalainen (Itsenäisyydenkatu 2),
+  Tuomiokirkko (Tuomiokirkonkatu 3), Tammelan stadion (Kalevan puistotie 21), Hiedanranta /
+  Lielahden kartano (Tehdaskartanonkatu 53), Ylisen kartano (Kuruntie 980, Ylöjärvi — 8 km north of
+  the old guess) and Kangasalan kirkko (Ainontie 1).
+- Added: the panel and the row list show the venue's street address beside its name, read from
+  `web/geo/venues.json`, so a dot's address is visible without opening anything else. Calendar rows
+  already label themselves by address.
+- Fixed: Kide sells one event once per organiser — "Baby's First Game Jam" arrived four times, one
+  per guild, each spelling the campus differently. Duplicate (date, start, title) listings are merged
+  and place strings are whitespace-normalised.
+- Verified: 371 events, 363 of them on a venue with a house number (the rest are parks, a racecourse
+  and a summer theatre whose listing publishes no number); `validate.py` 0 errors; 126 venues.
+- Note: the coordinates are OpenStreetMap address points, not venue-published points, and the
+  capacity of a newly registered venue is a class prior — the same estimate as every other figure.
+
 ### 0.12.1 — 2026-11-15
 The route cache is complete: no event falls back to a straight line.
 
@@ -289,9 +323,9 @@ First working build.
   supplies a real end minute when the game list carries playing time.
 - `events_schema`: **2** — row indices 0–6 frozen; 7–14 appended.
 - `flows_schema`: **1** — attendance, interest, zones, modes, corridors, arrival, egress.
-- `venues`: 1 — 48 registry venues plus calendar venues generated from the city calendar's own
-  published points (address kept, capacity unknown), 12 hubs, approximate coordinates flagged
-  per venue.
+- `venues`: 1 — 69 registry venues, each with a street address and an OpenStreetMap address point,
+  plus calendar venues generated from the city calendar's own published points (address kept,
+  capacity unknown), 12 hubs, approximate coordinates flagged per venue.
 - `zones`: 1 — 26 Tampere districts + 13 surrounding/Pirkanmaa bands.
 - Calibration dataset: **none yet** (priors only) — backtest pending.
 - Upstream feeds: `tampere-keikat` @ 2026-11-14 12:05 UTC snapshot; Liiga game list
