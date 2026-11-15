@@ -14,6 +14,7 @@ import hashlib
 import json
 import math
 import os
+import re
 import sys
 import urllib.request
 from collections import Counter, defaultdict
@@ -564,6 +565,9 @@ def kide_rows(alias_idx):
     for ev in events:
         venue = resolve_venue(ev["place"], alias_idx, VENUES)
         if not venue or venue["id"] == "tampere_muu":
+            detail = kide_feed.fetch_detail(ev.get("product_id"))
+            venue = kide_detail_venue(ev, detail)
+        if not venue or venue["id"] == "tampere_muu":
             skipped[ev["place"] or "(no place)"] += 1
             continue
         title_l = ev["title"].lower()
@@ -629,6 +633,47 @@ def place_venue(item):
     return venue
 
 
+def kide_detail_venue(ev, detail):
+    """Use the address and point published in a Kide product detail.
+
+    The list endpoint only has a free-text place; the detail is the organiser's own
+    published location. A vague place name or a postal box is not an address, so it is
+    still dropped rather than guessed.
+    """
+    if not isinstance(detail, dict):
+        return None
+    try:
+        lat = float(detail.get("latitude"))
+        lon = float(detail.get("longitude"))
+    except (TypeError, ValueError):
+        return None
+    street = " ".join((detail.get("streetAddress") or "").split())
+    low = street.lower()
+    if (not street or not re.search(r"\d", street) or low in {"tampereen seutu", "tampere"}
+            or low.startswith("pl ") or not (61.0 < lat < 62.0 and 22.5 < lon < 25.0)):
+        return None
+    postal = " ".join((detail.get("postalCode") or "").split())
+    city = " ".join((detail.get("city") or "").split())
+    address = street + (", " + " ".join(p for p in (postal, city) if p) if postal or city else "")
+    existing = resolve_by_address(address, VENUES)
+    if existing and existing["id"] != "tampere_muu":
+        return existing
+    vid = "kide-" + hashlib.sha1(
+        f"{address.lower()}|{round(lat, 5)},{round(lon, 5)}".encode()).hexdigest()[:8]
+    for v in VENUES:
+        if v["id"] == vid:
+            return v
+    venue = {
+        "id": vid, "name": (ev.get("place") or place_name(street)).strip(),
+        "lat": lat, "lon": lon, "area": nearest_zone(lat, lon),
+        "kind": "student", "capacity": {"gig": 0},
+        "hubs": nearest_hubs(lat, lon), "approx": False, "address": address,
+        "source": "kide product location",
+    }
+    VENUES.append(venue)
+    return venue
+
+
 def venue_record(v):
     row = {"id": v["id"], "name": v["name"], "lat": v["lat"], "lon": v["lon"],
            "area": v["area"], "kind": v["kind"], "capacity": v["capacity"],
@@ -677,6 +722,9 @@ def build(mode="full", with_samples=False):
     seed = load_json(os.path.join(ROOT, "data", "seed_events.json")) if with_samples else {"events": []}
     sports_rows, sports_status = fetch_liiga()
     student_rows, student_status = kide_rows(alias_idx)
+    # kide_rows can add a venue whose location came from the product detail endpoint;
+    # include those names before the student rows are resolved a second time.
+    alias_idx = build_alias_index(VENUES)
     city_items, city_status = city_feed.fetch()
     status = {"music": music_status, "seed": "ON" if with_samples else "OFF",
               "sports": sports_status, "student": student_status, "culture": city_status}

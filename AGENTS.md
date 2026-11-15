@@ -118,11 +118,14 @@ rather than presenting it as published.
 
 ### Student parties
 
-`scripts/feeds/kide.py` is the student source and it publishes **no coordinates at all** — only a
-free-text place string. A product is placed only when that string matches a registry venue (name or
-`aliases`, whitespace-normalised, with the spellings Kide actually uses added as aliases); every
-other product is dropped and logged rather than pinned to a guessed point. The same event sold
-separately by four guilds is merged on (date, start, title).
+`scripts/feeds/kide.py` is the student source. Its product **list** carries a free-text place and
+no coordinates. A product is first matched to a registry venue (name or `aliases`, whitespace-
+normalised, with the spellings Kide actually uses added as aliases). If that fails, the public
+product detail can supply the organiser's published `streetAddress`, postal code and point; use it
+only when the street has a number and the point is in the Tampere region. Vague places
+(`Tampereen seutu`) and postal boxes (`PL 54`) are dropped and logged, never guessed. After
+`kide_rows` adds one of these generated venues, rebuild the alias index before resolving the
+student rows. The same event sold separately by four guilds is merged on (date, start, title).
 
 ## Adding a feed adapter
 

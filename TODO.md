@@ -39,7 +39,10 @@
 - [x] 0.13.1 UI fixes: next-day `06:00 +1` label and one category legend row on desktop
 - [x] 0.13.2 address corrections: 28 venues moved to published street addresses and address
       points, plus the generic fallback; 765 stale route legs dropped, the event-used legs in use
-      refetched, and the panel's venue-address line restored; 257 older stale legs refreshed
+      refetched, and the panel's venue-address line restored
+- [x] 0.13.3 student events: Kide product details now supply the published address and point when
+      the list's free-text place does not match; 15 more student events (47 → 62), six new
+      locations and their walking legs; 257 older stale legs refreshed
 - [x] Sports adapter: Liiga public game list, Ilves/Tappara home games at Nokia Arena
 - [x] Feed end times: the Liiga adapter passes the playing time when a game carries one, so the
       hockey egress curve uses a real end instead of the 150-minute default
@@ -131,9 +134,11 @@
 
 ## Known issues
 
-- **Student events are matched, not geocoded.** Kide gives a place name but no coordinates, so a
-  product is only published when its place is already a registry venue; today that is 47 of 67. The
-  rest are dropped and logged, never placed on a guessed address.
+- **Student events are matched, not geocoded.** Kide's list gives a place name but no coordinates;
+  unresolved products use the address and point published on the product detail. Today 62 of 64
+  future products are published. Two are still dropped and logged because they have no single
+  place: the VETO apartment tour (starts in Niemenranta, moves between homes) and Yrityspäivät
+  (a postal box, PL 54). Neither is placed on a guessed address.
 - **A practice no longer inherits the arena.** `TTO x PIRATE Kyykkätreenit` at Hakametsän jäähalli
   now estimates a small group (up to 60) from the Kide `treenit` keyword; other events at big venues
   keep their real size.

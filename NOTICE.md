@@ -21,9 +21,9 @@ though it reuses code and interface patterns from it under the MIT licence.
   writes to that project.
 - Sports fixtures come from the public Liiga game list, filtered to Ilves and Tappara home
   games in Tampere.
-- Student events come from Kide's public Tampere product list. Kide publishes no coordinates,
-  so a product is placed only on a venue already in the registry; unplaceable products are
-  dropped and logged, never guessed.
+- Student events come from Kide's public Tampere product list. Its list endpoint has no coordinates;
+  unresolved products use the street address and point published on the product detail. Entries
+  with only a vague place or a postal box are dropped and logged, never guessed.
 - Stage, culture, library and community events come from Tampereen tapahtumakalenteri, using
   the calendar's own published point and street address.
 - Population figures are approximate public statistics.

@@ -2,6 +2,20 @@
 
 ## App
 
+### 0.13.3 — 2026-11-15
+Student events completed from Kide's published product locations.
+
+- Fixed: 17 future Kide products were dropped because the list endpoint carries only a free-text
+  place and no coordinates. The public product detail publishes the organiser's street address and
+  point; 15 of them now have a real venue. Student events go from 47 to 62.
+- Added: Bommari (Korkeakoulunkatu 5), Vertex Oy (Vaajakatu 9), TTHP (Korkeakoulunkatu 3),
+  Staabi ry (Kalevantie 4), Tampereen Opiskelijapuolikas (Ratinan rantatie 1) and the Kide
+  location at Korkeakoulunkatu 7, each on its published address point; their walking legs are in
+  the route cache.
+- Still excluded, deliberately: the VETO apartment tour (starts in Niemenranta and moves between
+  homes, so no single address) and Yrityspäivät (a PL 54 postal box). Neither is guessed.
+- No model or schema change: model 2026.11.5, schema 2, 395 events.
+
 ### 0.13.2 — 2026-11-15
 Venue addresses and points corrected across the registry.
 

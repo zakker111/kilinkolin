@@ -4,7 +4,7 @@ An **estimated crowd-flow heat map** for events in Tampere: pick a day, drag the
 where the estimated crowd is on the streets at that moment. The map is the answer; the panel
 names what is on.
 
-Live: https://zakker111.github.io/kilinkolin/ · **v0.13.2** · model **2026.11.5** · schema **2**
+Live: https://zakker111.github.io/kilinkolin/ · **v0.13.3** · model **2026.11.5** · schema **2**
 
 ## What it does
 
@@ -30,8 +30,9 @@ claim of measured attendance.
 
 - Music: [Tampere Keikat](https://github.com/zakker111/tampere-keikat), read-only.
 - Sports: the public Liiga game list, filtered to Ilves and Tappara home games at Nokia Arena.
-- Student: Kide's public Tampere product list. Kide publishes no coordinates, so a product is
-  placed only when its venue already exists in the registry; the rest are dropped and logged.
+- Student: Kide's public Tampere product list. Its list endpoint has no coordinates; when a place
+  does not match the registry, the product detail's published street address and point are used.
+  Entries with only a vague place or a postal box are dropped and logged, never guessed.
 - Stage, culture, library and community: Tampereen tapahtumakalenteri, which publishes both a
   point and a street address for each location.
 

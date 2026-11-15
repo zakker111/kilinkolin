@@ -2,9 +2,10 @@
 
 Kide is the ticketing platform most Tampere student organisations use. Its public
 product list carries the event name, the organiser, a free-text place and a real
-start **and** end time, which the music feed does not have. It carries no
-coordinates, so build.py resolves the place against the venue registry and drops
-anything it cannot put on a real address — nothing is guessed here.
+start **and** end time, which the music feed does not have. The list has no coordinates;
+when its place does not match the venue registry, build.py reads the public product
+detail, which carries the organiser's published street address and point. Entries with
+only a vague place or a postal box are dropped — nothing is guessed here.
 
 Source: https://api.kide.app/api/products?city=Tampere (public JSON, no key).
 """
@@ -14,6 +15,7 @@ import urllib.request
 from zoneinfo import ZoneInfo
 
 URL = "https://api.kide.app/api/products?city=Tampere"
+DETAIL_URL = "https://api.kide.app/api/products/{id}"
 TZ = ZoneInfo("Europe/Helsinki")
 MAX_EVENTS = 80          # keep one build bounded; the daily refresh picks up the rest
 SKIP_WORDS = ("jäsenyys", "membership", "kausikortti", "season card", "lahjakortti",
@@ -60,6 +62,7 @@ def fetch():
                 "date": starts.date().isoformat(),
                 "time": starts.strftime("%H:%M"),
                 "title": title,
+                "product_id": p.get("id"),
                 "place": place,
                 "organizer": (p.get("companyName") or "").strip(),
                 "minutes": minutes,
@@ -70,6 +73,33 @@ def fetch():
         if len(out) >= MAX_EVENTS:
             break
     return out, "OK"
+
+
+_DETAIL_CACHE = {}
+
+
+def fetch_detail(product_id):
+    """Return Kide's published location for a product, or None.
+
+    The list endpoint carries only a free-text place. The product detail carries the
+    street address and point that the organiser published; use that instead of guessing.
+    Never raise: one unavailable detail must not lose the whole student feed.
+    """
+    if not product_id:
+        return None
+    if product_id in _DETAIL_CACHE:
+        return _DETAIL_CACHE[product_id]
+    try:
+        req = urllib.request.Request(
+            DETAIL_URL.format(id=product_id),
+            headers={"User-Agent": "kilinkolin/0.11 (+https://github.com/zakker111/kilinkolin)"})
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            model = (json.loads(resp.read().decode("utf-8")) or {}).get("model") or {}
+        detail = model.get("product") if isinstance(model, dict) else None
+        _DETAIL_CACHE[product_id] = detail if isinstance(detail, dict) else None
+    except Exception:  # noqa: BLE001 - detail lookup is optional
+        _DETAIL_CACHE[product_id] = None
+    return _DETAIL_CACHE[product_id]
 
 
 def _price(value):
