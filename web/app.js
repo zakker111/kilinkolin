@@ -4,6 +4,17 @@
   const $ = (id) => document.getElementById(id);
   const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const CAT_LABEL = {
+    gigs: "Gig", sports: "Sports", student: "Student", stage: "Stage",
+    culture: "Culture", community: "Community", other: "Event"
+  };
+
+  let curDay = null;
+  let dayEvents = [];
+  let selectedId = null;
+
+  const esc = (s) => String(s == null ? "" : s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
   function stamp(raw) {
     const m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}) UTC$/.exec(raw || "");
@@ -42,9 +53,11 @@
     strip.querySelectorAll(".day").forEach((btn) => {
       btn.onclick = () => {
         const min = window.KMap.setDay(btn.dataset.day);
+        curDay = btn.dataset.day;
         markDay(btn.dataset.day);
         revealDay(btn);
         setTime(min, true);
+        renderPanel();
       };
     });
     return days;
@@ -72,6 +85,72 @@
     paintSlider();
   }
 
+  /* ------------------------------------------------------- right-hand panel
+     What is on today, and the details of the dot under the pointer. */
+  function renderDetail(id) {
+    const box = $("panelDetail");
+    if (!box) return;
+    const ev = dayEvents.find((e) => e.id === id);
+    if (!ev) {
+      box.className = "panel-detail";
+      box.innerHTML = `<span class="pd-hint">Hover a dot on the map, or a row below, for that event.</span>`;
+      return;
+    }
+    const end = ev.end != null ? "–" + window.KMap.clockLabel(ev.end) : "";
+    box.className = "panel-detail on";
+    box.innerHTML =
+      `<div class="pd-title">${esc(ev.title)}</div>` +
+      `<div class="pd-meta">${esc(ev.time)}${esc(end)} · ${esc(ev.venue)}</div>` +
+      `<div class="pd-meta"><span class="cat cat-${esc(ev.category)}">${esc(CAT_LABEL[ev.category] || "Event")}</span>` +
+      `${ev.mid != null ? `<span class="pd-est">≈ ${ev.mid.toLocaleString("fi-FI")} people, estimated</span>` : ""}</div>` +
+      `<div class="pd-note">Estimate, not a measurement.</div>`;
+  }
+
+  function markRow(id) {
+    document.querySelectorAll("#panelList .panelRow").forEach((row) => {
+      row.classList.toggle("sel", id != null && row.dataset.id === id);
+    });
+  }
+
+  function select(id) {
+    selectedId = id || null;
+    renderDetail(selectedId);
+    markRow(selectedId);
+  }
+
+  function renderPanel() {
+    const list = $("panelList");
+    if (!list) return;
+    dayEvents = window.KMap.dayEvents();
+    $("panelTitle").textContent = curDay ? `What's on · ${dayLabel(curDay)}` : "What's on";
+    $("panelCount").textContent = dayEvents.length
+      ? `${dayEvents.length} event${dayEvents.length === 1 ? "" : "s"}`
+      : "";
+    if (!dayEvents.length) {
+      list.innerHTML = `<li class="panelRow empty">No events on this day.</li>`;
+      renderDetail(null);
+      return;
+    }
+    const now = +$("timeSlider").value;
+    list.innerHTML = dayEvents.map((e) => {
+      const occurring = e.start != null && e.end != null && now >= e.start && now < e.end;
+      const soon = e.start != null && !occurring && now >= e.start - 120 && now < e.start;
+      return `<li class="panelRow${occurring ? " on" : ""}${soon ? " soon" : ""}" data-id="${esc(e.id)}">` +
+        `<span class="pr-time">${esc(e.time || "—")}</span>` +
+        `<span class="pr-body"><span class="pr-title">${esc(e.title)}</span>` +
+        `<span class="pr-venue">${esc(e.venue)}</span></span>` +
+        `<span class="cat cat-${esc(e.category)}">${esc(CAT_LABEL[e.category] || "Event")}</span></li>`;
+    }).join("");
+    list.querySelectorAll(".panelRow[data-id]").forEach((row) => {
+      const id = row.dataset.id;
+      row.addEventListener("mouseenter", () => { select(id); window.KMap.focusEvent(id); });
+      row.addEventListener("mouseleave", () => { if (selectedId === id) window.KMap.focusEvent(null); });
+      row.addEventListener("click", () => { select(id); window.KMap.focusEvent(id); });
+      row.addEventListener("focus", () => { select(id); window.KMap.focusEvent(id); });
+    });
+    renderDetail(selectedId && dayEvents.some((e) => e.id === selectedId) ? selectedId : null);
+  }
+
   function renderStatus(meta) {
     const pill = $("updatedBadge");
     const age = meta.generated ? (Date.now() - Date.parse(meta.generated.replace(" UTC", "Z"))) / 86400000 : 99;
@@ -89,7 +168,8 @@
       `Every number is an <b>estimate</b> from a population model — not measured attendance, not tracking. ` +
       `Basemap © OpenStreetMap contributors. Music data from ` +
       `<a href="https://github.com/zakker111/tampere-keikat" target="_blank" rel="noopener">Tampere Keikat</a> (MIT); ` +
-      `rows marked SAMPLE are placeholders. Events without a listed start are counted at 19:00. ` +
+      `hockey fixtures from the Liiga game list. Every event shown comes from a published feed — ` +
+      `placeholder rows are not published. Events without a listed start are counted at 19:00. ` +
       `The heat counts people travelling in before a start and heading home after an estimated end.`;
   }
 
@@ -106,22 +186,27 @@
     renderFoot(data);
     const events = toEvents(data.events || []);
     const days = buildDays(events);
+
+    window.KMap.onHover(select);
     await window.KMap.init(events);
 
     if (days.length) {
       const first = days[0];
       const min = window.KMap.setDay(first);
+      curDay = first;
       markDay(first);
       revealDay(document.querySelector(`.day[data-day="${first}"]`));
       setTime(min, true);
     } else {
       $("estimate").innerHTML = `<div class="e-line">No events in the feed right now.</div>`;
     }
+    renderPanel();
 
     $("timeSlider").addEventListener("input", (e) => {
       const min = +e.target.value;
       setTime(min, false);
       window.KMap.setTime(min);
+      renderPanel();
     });
   }
 
