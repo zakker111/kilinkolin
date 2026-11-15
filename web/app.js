@@ -167,6 +167,10 @@
     pill.querySelector(".status-text").textContent = meta.generated
       ? `Estimated flow model · rebuilt ${stamp(meta.generated)}`
       : "Bundled snapshot";
+    const badge = $("buildBadge");
+    if (badge) {
+      badge.textContent = `v${CFG.APP_VERSION || "?"} · updated ${meta.generated ? stamp(meta.generated) : "bundled"}`;
+    }
   }
 
   function renderFoot(meta) {

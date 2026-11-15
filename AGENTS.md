@@ -84,6 +84,10 @@ published coordinates (the city calendar supplies both the point and the address
 venues live in `web/geo/venues.json` with an `address`; they are never hand-written into the
 registry and never guessed.
 
+Each district in `registry/zones.json` carries a `transit_mode` (`tram`, `bus` or `rail`). It
+colours the corridor that district's people arrive along: close districts walk/bike, farther ones
+follow their tram, bus or train, and the venue's own hub is only a fallback.
+
 ### Addresses
 
 A registry venue must carry a **street address** (`"address": "Takojankatu 1 C"`), not a district

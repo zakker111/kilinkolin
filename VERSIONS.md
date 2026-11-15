@@ -2,6 +2,30 @@
 
 ## App
 
+### 0.12.3 — 2026-11-15
+Event size and venue size now shape the heat, and districts ride their own transit.
+
+- Added: `event_capacity()` in `scripts/build.py` derives an event-level crowd size from the source
+  when it can: the city calendar's published `maxParticipants` (capped to the venue's own capacity)
+  and Kide title keywords (`treenit`/practice -> a small group of up to 60 instead of the whole
+  hall). Otherwise it keeps the venue capacity prior.
+- Fixed: a student practice at a big arena (`TTO x PIRATE Kyykkätreenit` at Hakametsä) no longer
+  inherits the arena's thousands of seats; big gigs, matches and parties keep their real size. The
+  gravity catchment class uses the same event capacity, so the practice no longer pulls from the
+  whole province either.
+- Added: a venue-size class prior in `attendance_est()` (arena/hall 1.06-1.10x, small pub/bar 0.95x)
+  so a big-venue evening reads larger than a small pub or bar even at the same fill. It uses the
+  event's own capacity, so a practice booked in an arena stays small.
+- Changed: far districts draw their own transit corridor to the venue instead of collapsing onto the
+  venue's single hub. Each zone carries a `transit_mode` (tram/bus/rail) in `registry/zones.json`:
+  Hervanta -> tram, Tesoma/Pirkkala/Kaukajärvi -> bus, Nokia/Lempäälä -> train; short district legs
+  stay walk/bike.
+- Added: 5 verifiable Kide venues (Bar Tullari, H5 Bar, Megazone, Rush, F54/Fame Club) plus a CLINT
+  alias on TAMK, with real OSM address points; published student rows 38 -> 47.
+- Added: the site shows a small `v0.12.3 · updated ...` badge in the top-left, fed by the build
+  timestamp, so the running version and the last rebuild are visible.
+- Model version 2026.11.5.
+
 ### 0.12.2 — 2026-11-15
 Student parties and gigs sit on their real street addresses, and the site shows them.
 

@@ -21,14 +21,14 @@ from zoneinfo import ZoneInfo
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from feeds import kide as kide_feed  # noqa: E402  (adapter lives beside this file)
-from feeds import city_events as city_feed  # noqa: E402
+from feeds import tampere_city as city_feed  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WEB = os.path.join(ROOT, "web")
 GEO = os.path.join(WEB, "geo")
 
 KEIKAT_URL = "https://zakker111.github.io/tampere-keikat/data.json"
-MODEL_VERSION = "2026.11.2"
+MODEL_VERSION = "2026.11.5"
 SCHEMA_VERSION = 2
 
 # ---------------------------------------------------------------- taxonomy
@@ -320,11 +320,50 @@ def interest_score(ev, cap, category, sub, venue):
     return {"score": round(score), "band": band, "signals": [{"name": n, "points": p} for n, p in signals]}
 
 
+def event_capacity(e, venue):
+    """Per-event size signal, so a big gig/match/party reads big and a practice or
+    small talk reads small instead of inheriting the whole venue's capacity.
+
+    Sources of truth, in order:
+      * the city calendar's published ``maxParticipants`` (capped to the venue's own
+        capacity, since a room cannot hold more than it seats);
+      * Kide title keywords for student events (``treenit``/practice -> a small group,
+        ``sitsit``/``gaala``/party -> the venue's capacity);
+      * otherwise the venue's capacity prior (existing behaviour).
+    Missing input keeps the venue prior rather than inventing a number.
+    """
+    venue_cap = max(venue["capacity"].get("gig", 0), venue["capacity"].get("sport", 0), 20)
+    mp = e.get("max_participants")
+    if isinstance(mp, int) and mp > 0:
+        return max(20, min(mp, venue_cap))
+    title_l = (e.get("title") or "").lower()
+    if e.get("category") == "student" or e.get("kind") == "student":
+        practice_kw = ("treenit", "treeni", "harjoitus", "harjoitukset", "practice",
+                       "workout", "opastus", "kyykk")
+        if any(k in title_l for k in practice_kw):
+            # a practice/training session is a small group, not the whole hall
+            return min(venue_cap, 60)
+        # sitsit / gaala / party / turnaus keep the venue capacity (big event)
+    return venue_cap
+
+
 def attendance_est(cap, category, sub, interest, ev):
     fill = FILL.get(sub, CATEGORY_FALLBACK_FILL.get(category, 0.45))
     if ev.get("seed") and category == "sports" and sub == "hockey":
         fill = 0.92
-    mid = cap * fill * (0.72 + 0.45 * interest["score"] / 100.0)
+    # Venue-size class prior: after capacity is accounted for, an evening in a hall or arena
+    # still pulls a fuller room than a small pub or bar, and a 20-seat room is not a sell-out
+    # just because its handful of seats is full. Based on the *event's* capacity, so a practice
+    # booked in an arena (already reduced by event_capacity) does not get the big-venue boost.
+    if cap >= 10000:
+        venue_scale = 1.10
+    elif cap >= 2000:
+        venue_scale = 1.06
+    elif cap <= 150:
+        venue_scale = 0.95
+    else:
+        venue_scale = 1.0
+    mid = cap * fill * (0.72 + 0.45 * interest["score"] / 100.0) * venue_scale
     mid = min(mid, cap * 1.0)
     spread = 0.35 if cap < 500 else 0.22
     return {"low": int(mid * (1 - spread)), "mid": int(mid), "high": int(min(cap, mid * (1 + spread)))}
@@ -362,7 +401,7 @@ def modes_for(km, rail):
 
 
 def gravity(ev, venue, zones):
-    cap = max(venue["capacity"].get("gig", 0), venue["capacity"].get("sport", 0), 20)
+    cap = event_capacity(ev, venue)
     cls = crowd_class(cap, ev["category"], ev["sub"])
     max_km = {"A": 400.0, "B": 60.0, "S": 40.0, "C": 8.0}[cls]
     rows = []
@@ -447,11 +486,15 @@ def legs_for(venue, zone_rows, routes, hub_names, hub_kinds, attendance_mid):
         hub_key = f"{venue['id']}|hub:{hub_id}" if hub_id else None
         drive_key = f"{venue['id']}|hub:{hub_id}:drive" if hub_id else None
         zone_key = f"{venue['id']}|zone:{row['zone_id']}"
-        if km <= 3.0 and usable_route(routes, zone_key):
+        if km > 3.0 and usable_route(routes, zone_key):
+            # far district: draw its own transit corridor to the venue along the street
+            # network, instead of collapsing every outer district onto the venue's one hub
+            key = zone_key
+        elif km <= 3.0 and usable_route(routes, zone_key):
             # close districts: people walk the whole way
             key = zone_key
         elif km > 3.0 and usable_route(routes, drive_key):
-            # far districts: walk to the stop, then tram/bus/train along the road corridor
+            # no district corridor cached yet: use the venue hub's transit corridor
             key, label = drive_key, hub_names.get(hub_id, row["name"])
         elif usable_route(routes, zone_key):
             key = zone_key
@@ -460,7 +503,8 @@ def legs_for(venue, zone_rows, routes, hub_names, hub_kinds, attendance_mid):
         if key is None:
             continue
         rec = agg.setdefault(key, {"share": 0.0, "modes": defaultdict(float), "name": label,
-                                   "km": routes[key]["km"], "min": routes[key]["min"]})
+                                   "km": routes[key]["km"], "min": routes[key]["min"],
+                                   "row_km": km})
         rec["share"] += row["share"]
         for m, s in row["modes"].items():
             rec["modes"][m] += row["share"] * s
@@ -481,6 +525,16 @@ def legs_for(venue, zone_rows, routes, hub_names, hub_kinds, attendance_mid):
             if key.endswith(":drive"):
                 # transit corridor keeps the station's mode
                 mode = hub_kinds.get(hub_id_key, mode)
+        elif "|zone:" in key:
+            # district legs: close ones are walked/biked; farther ones follow that district's
+            # transit service — tram where the tram runs, train for the commuter towns,
+            # bus everywhere else
+            zid = key.split("|zone:")[-1]
+            zone = next((z for z in ZONES if z["id"] == zid), None)
+            if rec.get("row_km", rec["km"]) <= 3.0:
+                mode = "walk"
+            elif zone and zone.get("transit_mode"):
+                mode = zone["transit_mode"]
         legs.append({"key": key, "name": rec["name"], "share": round(rec["share"], 4),
                      "people": round(attendance_mid * rec["share"]), "mode": mode,
                      "km": rec["km"], "min": rec["min"]})
@@ -694,6 +748,7 @@ def build(mode="full", with_samples=False):
             "url": item["url"], "hour": int(item["time"].split(":")[0]),
             "legacy_genre": sub3, "category": category, "sub": sub3,
             "kind": item["kind"], "seed": False, "end_min": end_min,
+            "max_participants": int(item.get("max_participants") or 0),
         })
     if city_items:
         log(f"[city] {city_kept} events placed ({city_new} on a new calendar location), "
@@ -724,7 +779,7 @@ def build(mode="full", with_samples=False):
 
     for i, e in enumerate(events):
         venue = e["venue"]
-        cap = max(venue["capacity"].get("gig", 0), venue["capacity"].get("sport", 0), 20)
+        cap = event_capacity(e, venue)
         interest = interest_score(e, cap, e["category"], e["sub"], venue)
         att = attendance_est(cap, e["category"], e["sub"], interest, e)
         cls, zone_rows = gravity(e, venue, ZONES)

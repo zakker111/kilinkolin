@@ -59,6 +59,8 @@
       no longer produce an event with no origin zones
 - [x] Route cache complete: every venue has a hub, every flow draws real street geometry
       (0 corridor-only flows, 0 legs under 50 m; 3,150 legs over 7,050 km)
+- [x] Transit corridors by district: each zone's `transit_mode` (tram/bus/rail) colours the
+      corridor it sends people along, so far districts no longer collapse onto the venue's one hub
 - [x] Student venues: 21 student-party venues registered on their OpenStreetMap address points
       (Laulumaja, Save File, TAMK, Pii-klubi, Pursiseura, Juhlatalo Tapiola, Kamula, Ylioppilas-
       teatteri and the nightclubs Kide uses), so published student parties went 6 → 38 of 67
@@ -81,8 +83,9 @@
       Save File, Tampereen Ylioppilasteatteri, Juhlatalo Tapiola, Pursiseura, Pii-klubi, Kamula,
       TAMK, YTHS-sauna, Mixei, ZBase, Ilona, Galaxie, Bricks, Kaijakka, Onda, Sherlock Holmes,
       Kultainen Apina, Koskikeskus, Messukylän työväentalo, Hatanpään soutupaviljonki)
-- [ ] Student: Ankkuri (3 products), Antura, Megazone, CLINT and Bar Tullari publish no street
-      address anywhere, so those products stay dropped — a real address or nothing
+- [x] Student: added Bar Tullari, H5 Bar, Megazone, Rush, F54/Fame Club and a CLINT alias on TAMK
+      with real OSM address points; published student rows 38 → 47. Ankkuri, Antura, Tarkka and the
+      organiser-only names still publish no verifiable venue and stay dropped.
 - [ ] `feeds/trey.py` — treykalenteri.fi serves a JS app over HTML with no public JSON (the
       WordPress REST and Tribe endpoints return the app shell), so it would need a headless parse
 - [ ] Sports: basket.fi, pesistulokset.fi, F-liiga, Veikkausliiga adapters
@@ -96,11 +99,13 @@
 - [ ] Competition factor (two big events same evening split the same catchment)
 - [ ] Parking / tram capacity ceilings on car and transit shares
 - [ ] Student-night egress: model last-service cutoff instead of a flat tail
-- [ ] Event scale: a student practice at an arena currently inherits the arena's capacity, so the
-      estimate reads in the thousands. Needs a per-event size signal (ticket stock, practice /
-      treenit keyword) before that figure means anything.
-- [ ] Small-venue events (library talks, workshops) use the 20-person floor; a size signal from the
-      calendar's `maxParticipants` should feed the fill prior instead
+- [x] Event scale: student practices (Kide `treenit`/practice keywords) no longer inherit the
+      arena capacity; they estimate a small group (up to 60), while big gigs/matches/parties keep
+      their real relative size (`event_capacity()` in `build.py`).
+- [x] Calendar `maxParticipants` feeds the per-event size when published (capped to venue capacity);
+      events without it keep the venue prior rather than a fabricated number.
+- [x] Venue-size class prior: big halls/arenas read 6-10 % fuller than the same capacity would
+      imply, small pubs/bars 5 % lower, so venue size shows in the heat beyond raw capacity.
 
 ### Map
 - [ ] District boundary polygons instead of centroid blobs
@@ -117,12 +122,11 @@
 ## Known issues
 
 - **Student events are matched, not geocoded.** Kide gives a place name but no coordinates, so a
-  product is only published when its place is already a registry venue; today that is 38 of 67. The
+  product is only published when its place is already a registry venue; today that is 47 of 67. The
   rest are dropped and logged, never placed on a guessed address.
-- **A student event at a big venue inherits that venue's capacity.** `TTO x PIRATE Kyykkätreenit`
-  runs at Hakametsän jäähalli, so the fill prior multiplies a several-thousand-seat capacity and the
-  page estimates thousands of people for a practice. The range is published with `≈` and the same
-  caveat as every other figure, but treat it as an upper bound until the model has a size signal.
+- **A practice no longer inherits the arena.** `TTO x PIRATE Kyykkätreenit` at Hakametsän jäähalli
+  now estimates a small group (up to 60) from the Kide `treenit` keyword; other events at big venues
+  keep their real size.
 - **Calendar venues have no capacity.** The city calendar publishes a point and an address, not a
   hall size, so those events sit on the model's small-venue floor unless the listing carries
   `maxParticipants`. Big calendar events at registry venues (Tampere-talo, Vapriikki, Nokia Arena)
