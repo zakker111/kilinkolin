@@ -33,8 +33,10 @@ only when the model does.
    says "estimated flow model". Do not remove those labels.
 4. **Never invent data.** No fabricated attendance, capacity or population figures. Missing input
    means a wider band plus a note, not a made-up number.
-5. **Time zone:** all event times are Europe/Helsinki. A start between 02:00 and 06:00 is a
-   suspected parsing bug — investigate, don't publish silently.
+5. **Time zone:** all event times are Europe/Helsinki. The day strip runs 06:00–06:00, so a
+   start before 06:00 is moved to the previous date before the event is filtered and published
+   (`night_date()` in `build.py`). A suspicious 02:00–05:59 start is still investigated rather
+   than accepted as a parsing accident.
 6. **Subpath safety:** the site is served from `/kilinkolin/`. Always use relative URLs
    (`./data.json`), never `/data.json`.
 7. **Keep attribution:** `LICENSE`, `NOTICE.md` and the footer credit stay.
@@ -91,7 +93,11 @@ routing cache, and `registry/routes.json` keeps the full OSRM geometry.
 Every event must resolve to a real venue: a registry venue, or a venue generated from a feed's own
 published coordinates (the city calendar supplies both the point and the address). Generated
 venues live in `web/geo/venues.json` with an `address`; they are never hand-written into the
-registry and never guessed.
+registry and never guessed. `validate.py` fails if any published event's venue has no address,
+if a source reports `FAILED`, or if a flow has no matching event.
+
+Feeds are not row-capped. A source that returns more events must publish all of them; silently
+truncating a sorted feed on every run would make the missing tail permanent.
 
 `map.js` sets `html.is-mobile` from `(max-width: 700px)` or a coarse pointer up to 1024px. On a
 phone it caps canvas DPR at 1.75 (2 on desktop), samples fewer heat points and draws four map

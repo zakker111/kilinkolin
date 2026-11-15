@@ -2,6 +2,27 @@
 
 ## App
 
+### 0.13.4 — 2026-11-15
+Publish every future event, not just the first page of a sorted feed.
+
+- Fixed: the city calendar adapter cut its sorted list at 220 rows and the Kide adapter at 80.
+  Because each run sorted the same source and kept the first rows, the missing tail could never be
+  picked up by a later daily refresh. The caps are gone; all future single-day rows are evaluated.
+  This adds 181 calendar events and publishes 576 events across 158 venues (232 community,
+  115 culture, 51 stage, 71 gigs, 45 sports, 62 student).
+- Fixed: after-midnight starts were drawn on the following day. The day strip runs 06:00–06:00,
+  so a source date with a start before 06:00 now moves back one date before filtering and
+  publishing (`night_date()`). This puts PISTOT Bileristeily at 00:00 on the 9 Dec night strip,
+  not at 00:00 on 10 Dec.
+- Added: the validator now refuses a deployment when any live source reports `FAILED`, when a
+  published event's venue has no address, or when a flow has no matching event/venue. Partial
+  feed failures leave the last good site live instead of silently deleting a whole category.
+- Verified: 576 events, 158 venues, 2,714 used walking legs, 0 corridor-only flows, 0 missing
+  route keys; `validate.py` exits 0 with the two known 05:12 music warnings. The route cache has
+  3,829 legs (18,772 km); the new calendar venues' 434 missing legs were fetched before the
+  final rebuild.
+- No model or schema change: model 2026.11.5, schema 2.
+
 ### 0.13.3 — 2026-11-15
 Student events completed from Kide's published product locations.
 

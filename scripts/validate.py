@@ -35,11 +35,22 @@ def main():
     zones = load(os.path.join(WEB, "geo", "zones.json"))
     routes = load(os.path.join(WEB, "geo", "routes.json")).get("routes", {})
 
-    venue_ids = {v["id"] for v in venues["venues"]}
+    venues_by_id = {v["id"]: v for v in venues["venues"]}
+    venue_ids = set(venues_by_id)
     zone_ids = {z["id"] for z in zones["zones"]}
     events = data.get("events", [])
     if not events:
         errors.append("data.json has no events")
+
+    # A failed source silently removes a whole category from the site. Refuse to deploy
+    # partial data; the previous good deployment stays live instead.
+    for source, state in (data.get("source_status") or {}).items():
+        if source == "seed":
+            continue
+        if str(state).startswith("FAILED"):
+            errors.append(f"source {source} failed: {state}")
+        elif state == "CACHED":
+            warnings.append(f"source {source} used its cached copy")
 
     seen_ids = set()
     cats = {}
@@ -59,6 +70,10 @@ def main():
             errors.append(f"row {i} has bad date {date!r}")
         if venue_id not in venue_ids:
             errors.append(f"row {i} venue_id {venue_id!r} not in venues.json")
+        else:
+            place = venues_by_id[venue_id]
+            if not (place.get("address") or "").strip():
+                errors.append(f"row {i} venue {venue_id!r} has no street address")
         if not title or not venue:
             errors.append(f"row {i} missing title or venue")
         if time_s and ":" in time_s:
@@ -69,7 +84,19 @@ def main():
     f_events = flows.get("events", [])
     if len(f_events) != len(events):
         errors.append(f"flows has {len(f_events)} events but data has {len(events)}")
+    corridor_flows = [f.get("id") for f in f_events if f.get("corridors")]
+    if corridor_flows:
+        warnings.append(f"{len(corridor_flows)} flow(s) still use straight-line fallback corridors")
+    seen_flow_ids = set()
     for f in f_events:
+        fid = f.get("id")
+        if fid in seen_flow_ids:
+            errors.append(f"duplicate flow id {fid}")
+        seen_flow_ids.add(fid)
+        if fid not in seen_ids:
+            errors.append(f"flow {fid} has no matching event row")
+        if f.get("venue_id") not in venue_ids:
+            errors.append(f"flow {fid} venue {f.get('venue_id')!r} not in venues.json")
         att = f.get("attendance", {})
         if not (att.get("low", 0) <= att.get("mid", 0) <= att.get("high", 0)):
             errors.append(f"event {f.get('id')} attendance band is inconsistent: {att}")

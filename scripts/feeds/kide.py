@@ -17,7 +17,6 @@ from zoneinfo import ZoneInfo
 URL = "https://api.kide.app/api/products?city=Tampere"
 DETAIL_URL = "https://api.kide.app/api/products/{id}"
 TZ = ZoneInfo("Europe/Helsinki")
-MAX_EVENTS = 80          # keep one build bounded; the daily refresh picks up the rest
 SKIP_WORDS = ("jäsenyys", "membership", "kausikortti", "season card", "lahjakortti",
               "gift card", " Lippu", "lippupaketti")
 
@@ -33,7 +32,7 @@ def fetch():
     except Exception as exc:  # noqa: BLE001 - a broken source must not blank the site
         return [], f"FAILED: {exc}"
 
-    today = dt.date.today()
+    today = dt.datetime.now(TZ).date()
     out, seen = [], set()
     for p in products:
         try:
@@ -70,8 +69,6 @@ def fetch():
             })
         except (ValueError, TypeError, KeyError, AttributeError):
             continue  # one malformed product must not lose the whole source
-        if len(out) >= MAX_EVENTS:
-            break
     return out, "OK"
 
 

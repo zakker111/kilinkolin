@@ -31,6 +31,7 @@ GEO = os.path.join(WEB, "geo")
 KEIKAT_URL = "https://zakker111.github.io/tampere-keikat/data.json"
 MODEL_VERSION = "2026.11.5"
 SCHEMA_VERSION = 2
+TZ = ZoneInfo("Europe/Helsinki")
 
 # ---------------------------------------------------------------- taxonomy
 GROUPS = {
@@ -88,12 +89,30 @@ def log(*a):
 
 def clock_minutes(s):
     """Same convention as the page: 02:00–05:59 belongs to the previous night."""
+
+def clock_minutes(s):
+    """Same convention as the page: 02:00–05:59 belongs to the previous night."""
     try:
         h, m = (int(x) for x in (s or "19:00").split(":"))
     except (TypeError, ValueError):
         return 19 * 60
     v = h * 60 + m
     return v + 24 * 60 if v < 6 * 60 else v
+
+
+def night_date(date_s, time_s):
+    """The day whose 06:00–06:00 strip contains an after-midnight start.
+
+    Source calendars label a 00:30 event with that calendar date, while this site's
+    day strip starts at 06:00. Without moving those starts back one date, a 00:30
+    event on 9 Dec is drawn at 00:30 on 10 Dec (the next day's `+1` stop).
+    """
+    try:
+        day = dt.date.fromisoformat(date_s)
+        hour = int((time_s or "").split(":")[0])
+    except (TypeError, ValueError):
+        return date_s
+    return (day - dt.timedelta(days=1)).isoformat() if hour < 6 else date_s
 
 
 def hav_km(a, b):
@@ -140,7 +159,8 @@ def fetch_liiga():
     The feed carries no calendar export, but the game list includes the rink,
     its coordinates and the teams, so home games can be pinned to Nokia Arena.
     """
-    season = dt.date.today().year + (1 if dt.date.today().month >= 8 else 0)
+    today_helsinki = dt.datetime.now(TZ).date()
+    season = today_helsinki.year + (1 if today_helsinki.month >= 8 else 0)
     url = LIIGA_URL.format(season=season)
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "kilinkolin/0.8 (+https://github.com/zakker111)"})
@@ -805,7 +825,12 @@ def build(mode="full", with_samples=False):
     if unmatched:
         log(f"[venues] unresolved strings mapped to fallback: {dict(unmatched)}")
 
-    today = dt.date.today().isoformat()
+    # The UI's day strip runs 06:00–06:00, so an 00:30 start belongs to the previous
+    # strip. Do this before the date filter; an after-midnight event earlier today is
+    # already past, while one tomorrow belongs on today's strip.
+    for e in events:
+        e["date"] = night_date(e["date"], e["time"])
+    today = dt.datetime.now(TZ).date().isoformat()
     events = [e for e in events if e["date"] >= today]
     events.sort(key=lambda e: (e["date"], e["time"] or "99:99"))
 

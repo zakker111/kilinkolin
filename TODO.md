@@ -43,6 +43,13 @@
 - [x] 0.13.3 student events: Kide product details now supply the published address and point when
       the list's free-text place does not match; 15 more student events (47 → 62), six new
       locations and their walking legs; 257 older stale legs refreshed
+- [x] 0.13.4 completeness: removed the silent city (220) and Kide (80) row caps; all 402 eligible
+      calendar rows are evaluated and 398 are published (4 duplicate a source), taking the site to
+      576 events / 158 venues; the new venues' 434 walking legs were fetched, leaving 0 corridor
+      fallbacks. The validator now fails on a `FAILED` source, an event venue without an address,
+      or a flow without a matching event/venue.
+- [x] 0.13.4 after-midnight dates: a start before 06:00 now belongs to the previous 06:00–06:00
+      day strip, so midnight events are no longer drawn one day late.
 - [x] Sports adapter: Liiga public game list, Ilves/Tappara home games at Nokia Arena
 - [x] Feed end times: the Liiga adapter passes the playing time when a game carries one, so the
       hockey egress curve uses a real end instead of the 150-minute default
@@ -65,7 +72,8 @@
 - [x] A total feed failure keeps the last good data: the build refuses to write an empty
       map and exits non-zero, so the workflow stops before committing or deploying
 - [x] City calendar adapter: `scripts/feeds/city_events.py` publishes stage, culture, library
-      and community events (217 today) with the calendar's own coordinates and addresses
+      and community events (398 today) with the calendar's own coordinates and addresses; no row
+      cap hides the later months
 - [x] Calendar locations outside the registry become real generated venues (published point,
       address, nearest district and hub) instead of falling back to `tampere_muu`
 - [x] Far venues (Kangasala, Nokia, Hämeenkyrö) fall back to their nearest districts, so they
