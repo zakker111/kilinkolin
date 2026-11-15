@@ -2,6 +2,38 @@
 
 ## App
 
+### 0.12.0 — 2026-11-15
+Stage, culture, library and community events from the city's own calendar.
+
+- Added: `scripts/feeds/city_events.py` reads Tampereen tapahtumakalenteri
+  (`tapahtumat.tampere.fi/api/search/internal-content-fetch?lang=fi&country=FI&q=`; public JSON, no
+  key, the whole calendar in one ~3 MB response) and publishes its stage, culture, library and
+  community rows. Every location in that calendar carries a latitude/longitude **and** a street
+  address, so the rows are placed on the published point — nothing is geocoded or guessed.
+- Added: 217 calendar events land on the map — 21 stage, 74 culture, 122 community — taking the
+  live site from 122 to 339 events over 77 days.
+- Added: `place_venue()` turns a calendar location the registry does not know into a real venue
+  (published coordinates, full address, nearest district, nearest transit hub); `web/geo/venues.json`
+  now carries every venue's address. 137 calendar listings use such a venue, the other 80 resolve to
+  a registry venue by name or address (Pääkirjasto Metso, Vapriikki, Tampere-talo, …).
+- Added: `resolve_by_address` already handled "address in the row"; the calendar makes that the
+  normal path rather than the exception.
+- Changed: `source_status.culture` reports the calendar, and the all-feeds-failed guard counts four
+  sources.
+- Changed: `scripts/routes.py` also loads the generated venues, and the workflow fetches missing legs
+  in two bounded passes (`--from-flow --max 300`, then `--max 400`). Calendar venues therefore gain
+  real walking geometry as the cache fills: 59 of their 147 flows drew street legs on the first run,
+  the rest still use the straight fallback corridors until the next runs catch up.
+- Changed: a venue beyond its class catchment (Kangasala, Nokia, Hämeenkyrö, Lempäälä) now draws on
+  its nearest districts instead of producing an event with no origin at all.
+- Fixed: those far venues produced invalid flows ("no mode split", "neither legs nor corridors") that
+  the validator rejected; 20 such rows are gone.
+- Kept: multi-day and ongoing listings (an exhibition open for months) are not published as a daily
+  crowd event, music-only calendar rows are skipped because `tampere-keikat` already supplies gigs,
+  and rows duplicating another source (same day, same title) are dropped — 3 today.
+- Note: a calendar venue's capacity is unknown unless the listing publishes `maxParticipants`, so its
+  crowd is estimated at the small-venue floor and the figure is an estimate like every other one.
+
 ### 0.11.2 — 2026-11-15
 A failed rebuild no longer blanks the map.
 
@@ -238,14 +270,19 @@ First working build.
   supplies a real end minute when the game list carries playing time.
 - `events_schema`: **2** — row indices 0–6 frozen; 7–14 appended.
 - `flows_schema`: **1** — attendance, interest, zones, modes, corridors, arrival, egress.
-- `venues`: 1 — 48 venues, 12 hubs, approximate coordinates flagged per venue.
+- `venues`: 1 — 48 registry venues plus calendar venues generated from the city calendar's own
+  published points (address kept, capacity unknown), 12 hubs, approximate coordinates flagged
+  per venue.
 - `zones`: 1 — 26 Tampere districts + 13 surrounding/Pirkanmaa bands.
 - Calibration dataset: **none yet** (priors only) — backtest pending.
 - Upstream feeds: `tampere-keikat` @ 2026-11-14 12:05 UTC snapshot; Liiga game list
   (`liiga.fi/api/v2/games`) filtered to Ilves/Tappara home games in Tampere; Kide public product
-  list (`api.kide.app/api/products?city=Tampere`) for student events.
-- `sports` rows come from the Liiga adapter and `student` rows from the Kide adapter; `SAMPLE`
-  placeholders are no longer published. Kide rows carry a real end minute when the product does.
+  list (`api.kide.app/api/products?city=Tampere`) for student events; Tampereen tapahtumakalenteri
+  (`tapahtumat.tampere.fi/api/search/internal-content-fetch?lang=fi&country=FI&q=`) for stage,
+  culture, library and community events.
+- `sports` rows come from the Liiga adapter, `student` rows from the Kide adapter and `culture`
+  (stage/culture/community) rows from the city calendar; `SAMPLE` placeholders are no longer
+  published. Kide and calendar rows carry a real end minute when the source does.
 - Adapted interface: `tampere-keikat` @ `4be498d` (MIT).
 
 ## Versioning rules
