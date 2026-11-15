@@ -569,7 +569,7 @@ def place_venue(item):
 def venue_record(v):
     row = {"id": v["id"], "name": v["name"], "lat": v["lat"], "lon": v["lon"],
            "area": v["area"], "kind": v["kind"], "capacity": v["capacity"],
-           "approx": v.get("approx", False)}
+           "hubs": v.get("hubs") or [], "approx": v.get("approx", False)}
     if v.get("address"):
         row["address"] = v["address"]
     return row
@@ -590,6 +590,16 @@ def build(mode="full", with_samples=False):
     ZONES = zones_doc["zones"]
     hubs = venues_doc["transit_hubs"]
     HUBS = hubs
+    # A registry venue whose entry lists no transit hub (a church, a village hall, a library) is
+    # still reached through one: use the nearest registered hub, the same assumption the venues
+    # generated from the city calendar already use. Without this the route seeder has nothing to
+    # fetch for it and the event stays on the straight-line fallback forever.
+    hubless = [v for v in VENUES if not v.get("hubs")]
+    for v in hubless:
+        v["hubs"] = nearest_hubs(v["lat"], v["lon"])
+    if hubless:
+        log(f"[venues] {len(hubless)} venue(s) without a registry hub use their nearest one: "
+            + ", ".join(v["id"] for v in hubless))
     alias_idx = build_alias_index(VENUES)
 
     routes_path = os.path.join(ROOT, "registry", "routes.json")
