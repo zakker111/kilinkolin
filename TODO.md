@@ -45,6 +45,9 @@
       (unplaceable products dropped and logged, never guessed)
 - [x] Student rows carry the real end minute from the feed (sitsit, gaala, sauna evening), so their
       egress curve no longer uses the 300-minute default
+- [x] Every published event resolves to a venue with a real address: a street address found in a
+      row now outranks the generic fallback, and Finlaysonin kirkko (Puuvillatehtaankatu 2) is
+      registered with its OSM coordinates and the parish's published capacity
 
 ## Next
 
