@@ -2,17 +2,23 @@
 
 ## App
 
-### 0.9.1 — 2026-11-15
-Fluid, quieter interface.
+### 0.10.0 — 2026-11-15
+Only real events, and the day's programme beside the map.
 
-- Changed: the hour slider has a filled track and a larger thumb, and the fill follows the chosen hour.
-- Changed: the zoom buttons ease into the new scale over 240 ms instead of jumping.
-- Changed: the map fades in once tiles paint, the page eases in on load, and day buttons and the
-  tooltip get short, calm transitions.
-- Changed: the selected day scrolls itself into view on the strip; the estimate line fits on one
-  line at desktop width.
-- Changed: visible focus rings, tabular numbers and a reduced-motion mode that turns animation off.
-- Fixed: the loading overlay fades out instead of disappearing between frames.
+- Removed: the ten `SAMPLE` placeholder rows are no longer published. The build reads
+  `data/seed_events.json` only with `--with-samples`, `source_status.seed` reports `OFF`, and
+  `validate.py` fails the deploy if a placeholder reaches the live data. The site now shows music
+  and Liiga hockey only — nothing invented.
+- Added: a right-hand panel listing the chosen day's events in start order with the venue and kind.
+  The row for the hour you are looking at is marked "occurring now", events starting within two
+  hours are marked soon, and each row carries the estimated attendance with "≈".
+- Added: hover support on the map. Pointing at a dot names the event in the panel and enlarges the
+  dot; pointing at a row rings the matching dot. Tapping still works on phones.
+- Fixed: the legend markup contained a duplicated swatch block and a stray closing tag, and the
+  swatch rules sat inside the phone media query, so the desktop legend was missing a row.
+- Fixed: a tooltip could stay on screen over an empty patch of map, and the hover hit radius did
+  not match the tooltip's.
+- Note: `≈` figures remain estimates from the flow model, not measured attendance.
 
 ### 0.9.0 — 2026-11-15
 Dots for what is on, and a phone-first layout.
@@ -182,8 +188,9 @@ First working build.
 
 ## Data & model
 
-- `model_version`: **2026.11.1** — fill priors by category, gravity β = 1.6,
-  impedance from distance/speed approximation, class-based mode adjustment.
+- `model_version`: **2026.11.2** — fill priors by category, gravity β = 1.6,
+  impedance from distance/speed approximation, class-based mode adjustment; the Liiga adapter
+  supplies a real end minute when the game list carries playing time.
 - `events_schema`: **2** — row indices 0–6 frozen; 7–14 appended.
 - `flows_schema`: **1** — attendance, interest, zones, modes, corridors, arrival, egress.
 - `venues`: 1 — 46 venues, 12 hubs, approximate coordinates flagged per venue.
@@ -191,7 +198,7 @@ First working build.
 - Calibration dataset: **none yet** (priors only) — backtest pending.
 - Upstream feeds: `tampere-keikat` @ 2026-11-14 12:05 UTC snapshot; Liiga game list
   (`liiga.fi/api/v2/games`) filtered to Ilves/Tappara home games in Tampere.
-- `sports` rows now mix the Liiga adapter with the remaining `SAMPLE` placeholders.
+- `sports` rows come from the Liiga adapter only; `SAMPLE` placeholders are no longer published.
 - Adapted interface: `tampere-keikat` @ `4be498d` (MIT).
 
 ## Versioning rules
