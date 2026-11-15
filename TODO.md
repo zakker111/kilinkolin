@@ -41,17 +41,26 @@
       under the phone media query, so the desktop legend lost a row
 - [x] Fixed: hovering a dot never showed anything (only taps did) and a tooltip could stay stuck
       over an empty patch of map
+- [x] Student adapter: Kide public product list, real start and end times, strict venue matching
+      (unplaceable products dropped and logged, never guessed)
+- [x] Student rows carry the real end minute from the feed (sitsit, gaala, sauna evening), so their
+      egress curve no longer uses the 300-minute default
 
 ## Next
 
 ### Feeds (highest value)
 - [ ] `feeds/city_events.py` — walk `tapahtumat.tampere.fi` topic IDs (library topic
       `677f933068bf7f5f79171c68` verified), plus `tampere.fi/api/eventz-today/<paragraph>` sections
-- [ ] `feeds/students.py` — treykalenteri (HTML, no WP REST), Tamko, Yo-talo, Kide
+- [x] Student: `scripts/feeds/kide.py` reads Kide's public Tampere product list (real start and
+      end times) and `kide_rows()` in `build.py` places each product on a registry venue
+- [ ] Student: add the venues Kide names that the registry does not have yet (Laulumaja, Save File,
+      Ankkuri, Tampereen Yliopistoteatteri…), each with a real address and a published capacity —
+      61 of 67 current products are dropped for an unknown place rather than guessed
+- [ ] `feeds/students.py` — treykalenteri (HTML, no WP REST), Tamko, Yo-talo
 - [x] Sports: Liiga JSON (Ilves/Tappara home games) lives in `fetch_liiga` in `build.py`
 - [ ] Sports: basket.fi, pesistulokset.fi, F-liiga, Veikkausliiga adapters
-- [ ] Student: still blocked — TREY calendar is a JS app over an unauthenticated Strapi API;
-      Kide's public API has no Tampere locality filter
+- [x] Student: Kide's public product list works with `?city=Tampere` (67 future products, 11 of
+      them naming a known venue) and is now the `student` source
 - [ ] `feeds/ticketmaster.py` — Discovery API, `countryCode=FI` (needs free key)
 - [ ] `feeds/longtail.py` — Tampere-talo, Nokia Arena, Särkänniemi, Vapriikki,
       TTT/Komediateatteri/Telakka, seurakunnat, markets
@@ -77,13 +86,16 @@
 
 ## Known issues
 
-- **Only music and Liiga hockey are published.** Student, stage, culture and community adapters are
-  still unwired, and their `SAMPLE` rows stay out of the build, so those categories are empty.
+- **Student events are matched, not geocoded.** Kide gives a place name but no coordinates, so a
+  product is only published when its place is already a registry venue; today that is 6 of 67. The
+  rest are dropped and logged, never placed on a guessed address.
+- **Music, Liiga hockey and Kide student events are published.** Stage, culture and community
+  adapters are still unwired, and their `SAMPLE` rows stay out of the build, so those categories
+  are empty.
 - **Coordinates are approximate** (100–300 m) for venues not individually verified.
 - **Mode split is a distance heuristic**, not real routes. Treat shares as indicative.
 - **`tampere-keikat` feed only contains music**, and only future events.
 - **liiga.fi schedule** is now read from `api/v2/games`; the contract is undocumented and may move.
-- **Student parties are not published** — no dependable public Tampere feed found yet.
 - **Tile provider policy**: the default OSM tile service is fine for a small site but has no
   SLA; swap `TILE_URL` for a paid/self-hosted provider if traffic grows.
 - **Corridors are schematic** straight-ish lines, not street routing.
