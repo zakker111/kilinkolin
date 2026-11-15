@@ -575,6 +575,18 @@ def build(mode="full", with_samples=False):
     events = [e for e in events if e["date"] >= today]
     events.sort(key=lambda e: (e["date"], e["time"] or "99:99"))
 
+    # A bad network day must not replace the page with an empty map. If every feed failed (or
+    # nothing survived the date filter) leave web/data.json and web/geo exactly as they are and
+    # exit non-zero, so the workflow stops before committing or deploying the last good data away.
+    feeds = {k: status[k] for k in ("music", "sports", "student")}
+    failed = [k for k, v in feeds.items() if str(v).startswith("FAILED")]
+    if not events or len(failed) == len(feeds):
+        reason = ("every feed failed" if len(failed) == len(feeds)
+                  else "no events survived the date filter")
+        log(f"[build] {reason} ({', '.join(failed) or 'none failed'}) — keeping the last good data: "
+            "web/data.json and web/geo are untouched")
+        return 0
+
     rows, flows, ev_geo = [], [], []
     by_cat = Counter()
     by_area = Counter()
@@ -593,7 +605,7 @@ def build(mode="full", with_samples=False):
         by_area[venue["area"]] += 1
 
         start_min = clock_minutes(e["time"])
-        # Prefer a real end time from the feed when a sport adapter provides one.
+        # Prefer a real end time from the feed when an adapter provides one.
         if e.get("end_min") is not None:
             end_min = float(e["end_min"])
         else:
