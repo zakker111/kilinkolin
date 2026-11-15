@@ -1,0 +1,243 @@
+diff --git a/AGENTS.md b/AGENTS.md
+index a63d8a6..968ee87 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -16,6 +16,13 @@ Hosted on GitHub Pages at `https://zakker111.github.io/kilinkolin/`.
+ 
+ Not a fork of Tampere Keikat — it reads that project's published feed. See `NOTICE.md`.
+ 
++## Versions
++
++`APP_VERSION` lives in `web/config.js`. Every release also gets a top entry in `VERSIONS.md`, a
++line in `README.md` and a note in `TODO.md`; keep those in step when the site changes.
++`MODEL_VERSION` (currently 2026.11.5) lives in `scripts/build.py` and `web/config.js` and changes
++only when the model does.
++
+ ## Hard rules
+ 
+ 1. **Never write to `zakker111/tampere-keikat`.** It is read-only input.
+@@ -126,5 +133,7 @@ separately by four guilds is merged on (date, start, title).
+ - `git diff` contains no key, no `vendor/` churn, no build output outside `web/`.
+ - `TODO.md` updated; `VERSIONS.md` entry if behaviour or schema changed.
+ - `AGENTS.md` updated when the layout, controls or data contract change.
++- `README.md` updated when the user-facing behaviour or data sources change; the app version in
++  `web/config.js`, `README.md` and `VERSIONS.md` must agree.
+ - If the UI changed, load it locally and check that picking a day and dragging the hour repaints
+   the heat over the tiles and that the estimate box agrees with the map.
+diff --git a/NOTICE.md b/NOTICE.md
+index 7aadb30..89678b0 100644
+--- a/NOTICE.md
++++ b/NOTICE.md
+@@ -19,14 +19,21 @@ though it reuses code and interface patterns from it under the MIT licence.
+ - Music event data is read at build time from the published Tampere Keikat feed
+   (`https://zakker111.github.io/tampere-keikat/data.json`). Read-only; this repo never
+   writes to that project.
++- Sports fixtures come from the public Liiga game list, filtered to Ilves and Tappara home
++  games in Tampere.
++- Student events come from Kide's public Tampere product list. Kide publishes no coordinates,
++  so a product is placed only on a venue already in the registry; unplaceable products are
++  dropped and logged, never guessed.
++- Stage, culture, library and community events come from Tampereen tapahtumakalenteri, using
++  the calendar's own published point and street address.
+ - Population figures are approximate public statistics.
+-- Venue coordinates are approximate (see `registry/venues.json`), not survey-grade.
+-- Rows flagged `SAMPLE` in the UI are placeholder rows for categories whose real feeds
+-  are not wired yet (sports, student, theatre, library). They are never presented as real.
++- Venue points are OpenStreetMap address points where available; approximate points are
++  flagged in `registry/venues.json`, not presented as survey-grade.
+ - Street geometry comes from the FOSSGIS OSRM service over OpenStreetMap data (ODbL).
++- No SAMPLE or placeholder rows are published. `data/seed_events.json` is loaded only with
++  `--with-samples`, and `validate.py` rejects a placeholder in the live data.
+ 
+ ## Not affiliated
+ 
+-Google Maps, Ticketmaster, Eventz / Tampereen tapahtumakalenteri, Digitransit, Liiga,
+-Korisliiga, Superpesis, TREY, Tamko and Kide are third-party services with their own terms.
+-Nothing here implies endorsement by them.
++OpenStreetMap, FOSSGIS/OSRM, Tampereen tapahtumakalenteri, Liiga, Kide and Tampere Keikat are
++third-party services with their own terms. Nothing here implies endorsement by them.
+diff --git a/README.md b/README.md
+index 40e003a..bb517c2 100644
+--- a/README.md
++++ b/README.md
+@@ -1,51 +1,74 @@
+ # Kilinkolin
+ 
+-An **estimated crowd-flow map** for events in Tampere: pick a day and an event, and see where its
+-crowd comes from, how it travels, and when it arrives. No lists, no clutter — just the map.
+-Kilinkolin is a made-up name ("kilinkolin" is the sitsit toast).
++An **estimated crowd-flow heat map** for events in Tampere: pick a day, drag the hour, and see
++where the estimated crowd is on the streets at that moment. The map is the answer; the panel
++names what is on.
+ 
+-Live: https://zakker111.github.io/kilinkolin/
++Live: https://zakker111.github.io/kilinkolin/ · **v0.13.0** · model **2026.11.5** · schema **2**
+ 
+ ## What it does
+ 
+-- **Origin heat map** — dark red = more likely origin, pale rose = less likely, on an
+-  OpenStreetMap basemap. No API key needed.
+-- **Corridors** — mode-coloured routes from the main origins, with moving arrival dots.
+-- **Time scrubber** — 2 hours before to 1 hour after the start; the arrival dots move with it.
+-- **Event panel** — estimated attendance with range, interest score and its signals,
+-  origin split, mode split, arrival profile.
++- **Street heat** — a density field over real walking routes from every district to every event
++  happening that day. Dark red is the busiest streets, yellow the quietest.
++- **Arrivals and departures** — the heat includes people walking to events and people leaving
++  them, so a venue keeps its crowd through the evening instead of going dark at the start.
++- **Day strip + hour scrubber** — 15-minute steps from 06:00 to 06:00 the next day. Moving the
++  hour repaints the heat and updates the estimate.
++- **What's on** — the day's events in start order with venue and address, the event under the
++  pointer expanded, and "occurring now" / "soon" marks for the chosen hour.
++- **Event dots** — gigs red, sports blue, student parties amber, stage purple, culture teal and
++  community grey. Tap or click a dot for its title, time and venue.
++- **Phone layout** — the page detects a phone (`html.is-mobile`) from a narrow or coarse-pointer
++  viewport, uses a 50dvh map, a compact legend, larger touch targets and safe-area padding, and
++  never scrolls sideways.
+ - Pan, wheel-zoom and ± buttons on the map itself.
+ 
+-Every number is an estimate: `≈`, with a range. No tracking, no personal data, no claim of
+-measured attendance.
++Every number is an estimate: `≈`, with a range. There is no tracking, no personal data and no
++claim of measured attendance.
++
++## Data sources
++
++- Music: [Tampere Keikat](https://github.com/zakker111/tampere-keikat), read-only.
++- Sports: the public Liiga game list, filtered to Ilves and Tappara home games at Nokia Arena.
++- Student: Kide's public Tampere product list. Kide publishes no coordinates, so a product is
++  placed only when its venue already exists in the registry; the rest are dropped and logged.
++- Stage, culture, library and community: Tampereen tapahtumakalenteri, which publishes both a
++  point and a street address for each location.
++
++`data/seed_events.json` holds SAMPLE placeholders and is **not** read by the normal build. It is
++loaded only with `--with-samples`, and `validate.py` refuses to publish a placeholder.
++
++## Performance
++
++- Browser route geometry is simplified at build time (Douglas-Peucker, ~9 m) and rounded to five
++  decimals. The full OSRM geometry stays in `registry/routes.json`.
++- JSON is fetched with normal HTTP caching, and phone rendering caps canvas DPR and heat samples.
++- The hour slider updates row state in place instead of rebuilding the list on every input.
+ 
+ ## Build
+ 
+ ```bash
+-python3 scripts/build.py --mode full   # writes web/data.json + web/geo/*.json
+-python3 scripts/validate.py            # schema, conservation, coverage checks
+-python3 -m http.server -d web 3003     # preview
++python3 scripts/routes.py --from-flow   # add missing walking legs (optional)
++python3 scripts/build.py --city tampere --mode full
++python3 scripts/validate.py             # schema, conservation, coverage
++python3 -m http.server -d web 3003      # preview at http://localhost:3003
+ ```
+ 
+ ## Deploy
+ 
+ GitHub Actions → Pages. `Pages → Source` must be **GitHub Actions**.
+ 
+-- No map key or secret is required: the basemap is OpenStreetMap raster tiles.
+-- Optional **secret** `DIGITRANSIT_API_KEY` — build-time routing (not yet used by the default build).
++The workflow syncs events daily at 05:15 UTC, does a guaranteed full rebuild on Sundays at
++04:00 UTC, retries on Sunday at 06:00 UTC, and runs on pushes. `validate.py` blocks deployment,
++so a failed build leaves the last good site up.
++
++No map key or secret is required: the basemap is OpenStreetMap raster tiles. Optional secret
++`DIGITRANSIT_API_KEY` is available at build time for routing.
+ 
+-The workflow runs a daily event sync (05:15 UTC), a weekly full rebuild (Sun 04:00 UTC),
+-and on pushes. A failed validation blocks deployment; the last good site stays up.
++## Honesty
+ 
+-## Data & honesty
++Venue points are OpenStreetMap address points where available; points that are approximate are
++flagged. Capacities nobody publishes are class priors. Music, sports, student and calendar rows
++are real published events, never placeholders.
+ 
+-- Music events come from [Tampere Keikat](https://github.com/zakker111/tampere-keikat) (MIT), read-only.
+-- Sports rows come from the public Liiga game list, student parties from Kide's Tampere product
+-  list, and stage, culture, library and community rows from the city's own event calendar. Every
+-  row is a real listing from one of those feeds; `validate.py` rejects a placeholder.
+-- Every event sits on a venue with a **street address**, and the panel and the row list show that
+-  address beside the venue. The student source publishes no coordinates, so a product is published
+-  only when its place is already a registry venue — otherwise it is dropped and logged.
+-- Attendance = venue capacity × fill prior × interest score, calibrated against reported league
+-  attendance once that scraper lands. Origins = population gravity over travel impedance.
+-- See `AGENTS.md` for rules and `VERSIONS.md` for model/schema provenance.
++See `AGENTS.md` for the data contract and `VERSIONS.md` for release and model provenance.
+diff --git a/TODO.md b/TODO.md
+index 38b76ae..4297c32 100644
+--- a/TODO.md
++++ b/TODO.md
+@@ -33,6 +33,8 @@
+ - [x] Mobile performance: browser route geometry simplified (3.25 MB -> 1.43 MB), canvas DPR capped
+       at 1.75, normal HTTP caching, in-place panel updates and a compact legend
+ - [x] Mobile detection: `html.is-mobile` from viewport/pointer, a 50dvh map and four map labels
++- [x] Release 0.13.0: version bump and README, NOTICE, AGENTS and TODO refreshed to the live
++      day-and-hour site
+ - [x] Sports adapter: Liiga public game list, Ilves/Tappara home games at Nokia Arena
+ - [x] Feed end times: the Liiga adapter passes the playing time when a game carries one, so the
+       hockey egress curve uses a real end instead of the 150-minute default
+diff --git a/VERSIONS.md b/VERSIONS.md
+index 3a04437..8606fce 100644
+--- a/VERSIONS.md
++++ b/VERSIONS.md
+@@ -2,6 +2,19 @@
+ 
+ ## App
+ 
++### 0.13.0 — 2026-11-15
++Mobile-first release, with the documentation brought up to date.
++
++- This release promotes the 0.12.4 mobile and performance work as the current baseline: phone
++  detection, a 50dvh map, compact legend, capped canvas DPR, simplified route geometry, normal
++  HTTP caching and in-place panel updates.
++- Rewrote `README.md` around the site as it works now — day strip, hour scrubber, street heat,
++  event dots and the "What's on" panel — instead of the old event-selector description.
++- Updated `NOTICE.md`: it lists the four live feeds and no longer claims that sports, student,
++  theatre or library rows are SAMPLE placeholders.
++- Updated `AGENTS.md` with the version-bump rule and `TODO.md` with the release entry.
++- No model, schema or data change: model 2026.11.5, schema 2, 380 events at release.
++
+ ### 0.12.4 — 2026-11-15
+ Faster, lighter and properly laid out on a phone.
+ 
+@@ -361,17 +374,18 @@ First working build.
+ 
+ ## Data & model
+ 
+-- `model_version`: **2026.11.2** — fill priors by category, gravity β = 1.6,
+-  impedance from distance/speed approximation, class-based mode adjustment; the Liiga adapter
+-  supplies a real end minute when the game list carries playing time.
++- `model_version`: **2026.11.5** — fill priors by category, gravity β = 1.6,
++  impedance from distance/speed approximation, class-based mode adjustment; event capacity from
++  published participant counts and Kide practice keywords, a venue-size class prior, district
++  transit corridors, and a real end minute when the source publishes one.
+ - `events_schema`: **2** — row indices 0–6 frozen; 7–14 appended.
+ - `flows_schema`: **1** — attendance, interest, zones, modes, corridors, arrival, egress.
+-- `venues`: 1 — 69 registry venues, each with a street address and an OpenStreetMap address point,
++- `venues`: 1 — 74 registry venues, each with a street address and an OpenStreetMap address point,
+   plus calendar venues generated from the city calendar's own published points (address kept,
+-  capacity unknown), 12 hubs, approximate coordinates flagged per venue.
+-- `zones`: 1 — 26 Tampere districts + 13 surrounding/Pirkanmaa bands.
++  capacity unknown); 131 venues in the current build, approximate coordinates flagged per venue.
++- `zones`: 1 — 40 zones: Tampere districts plus surrounding/Pirkanmaa bands and a long-distance band.
+ - Calibration dataset: **none yet** (priors only) — backtest pending.
+-- Upstream feeds: `tampere-keikat` @ 2026-11-14 12:05 UTC snapshot; Liiga game list
++- Upstream feeds: `tampere-keikat` feed snapshot read at build time; Liiga game list
+   (`liiga.fi/api/v2/games`) filtered to Ilves/Tappara home games in Tampere; Kide public product
+   list (`api.kide.app/api/products?city=Tampere`) for student events; Tampereen tapahtumakalenteri
+   (`tapahtumat.tampere.fi/api/search/internal-content-fetch?lang=fi&country=FI&q=`) for stage,
+diff --git a/web/config.js b/web/config.js
+index ba735dd..f4d6bcb 100644
+--- a/web/config.js
++++ b/web/config.js
+@@ -3,7 +3,7 @@ window.KILINKOLIN = {
+   APP_NAME: "Kilinkolin",
+   TAGLINE: "Estimated crowd flow for events in Tampere.",
+   CITY: "tampere",
+-  APP_VERSION: "0.12.4",
++  APP_VERSION: "0.13.0",
+   MODEL_VERSION: "2026.11.5",
+   SCHEMA_VERSION: 2,
+ 
