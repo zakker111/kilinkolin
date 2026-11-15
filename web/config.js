@@ -3,7 +3,7 @@ window.KILINKOLIN = {
   APP_NAME: "Kilinkolin",
   TAGLINE: "Estimated crowd flow for events in Tampere.",
   CITY: "tampere",
-  MODEL_VERSION: "2026.11.1",
+  MODEL_VERSION: "2026.11.2",
   SCHEMA_VERSION: 2,
 
   /* Raster basemap. Any XYZ tile template works; no API key needed.
