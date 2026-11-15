@@ -82,7 +82,14 @@
           painted++;
         }
       }
-      if (painted && $("mapLoading")) $("mapLoading").style.display = "none";
+      if (painted) {
+        const loading = $("mapLoading");
+        if (loading && loading.style.display !== "none") {
+          loading.style.opacity = "0";
+          setTimeout(() => { loading.style.display = "none"; }, 260);
+        }
+        this.canvas.classList.add("ready");
+      }
       if (this.paint) this.paint(ctx, this);
     }
     tile(z, x, y) {
@@ -106,8 +113,21 @@
       this.schedule();
     }
     zoomBy(d) {
-      this.zoom = Math.max(this.minZoom, Math.min(this.maxZoom, this.zoom + d));
-      this.schedule();
+      this.zoomTo(this.zoom + d);
+    }
+    zoomTo(target) {
+      const end = Math.max(this.minZoom, Math.min(this.maxZoom, target));
+      const start = this.zoom, t0 = performance.now();
+      if (this._zoomRaf) cancelAnimationFrame(this._zoomRaf);
+      const step = (now) => {
+        const k = Math.min(1, (now - t0) / 240);
+        const eased = 1 - Math.pow(1 - k, 3);
+        this.zoom = start + (end - start) * eased;
+        this.draw();
+        if (k < 1) this._zoomRaf = requestAnimationFrame(step);
+        else this._zoomRaf = null;
+      };
+      this._zoomRaf = requestAnimationFrame(step);
     }
     _bind() {
       const c = this.canvas;
