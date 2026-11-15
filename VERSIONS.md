@@ -2,6 +2,18 @@
 
 ## App
 
+### 0.8.0 — 2026-11-15
+Traffic both ways.
+
+- Added: the estimate now counts departures as well as arrivals. Each event gets an estimated end
+  (150 min for gigs, 300 for student nights, 120 for culture and community events), and the egress
+  curve spreads the crowd over the 45 minutes after it.
+- Changed: the heat and the count include people heading home, so a venue no longer goes dark the
+  moment the event starts and lights up again when it ends.
+- Changed: the legend reads "Estimated traffic on the streets" because the layer is no longer
+  arrivals only.
+- Note: the feed has no end times; they are approximations like every other number here.
+
 ### 0.7.2 — 2026-11-15
 Every event contributes.
 
@@ -156,7 +168,7 @@ First working build.
 ## Versioning rules
 
 - **MAJOR** — the UI can no longer read the data (row indices changed, file removed).
-- **MINOR** — new source, category, view or model capability.
+- **MINOR** — new source, category, view or capability.
 - **PATCH** — fixes, copy, styling, data corrections.
 
 Every build stamps `generated`, `schema_version` and `model_version` into `web/data.json`
