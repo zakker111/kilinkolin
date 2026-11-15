@@ -31,6 +31,8 @@
 - [x] Event dots: gigs red, sports blue, student amber; tap a dot for title, time and venue
 - [x] Phone layout: stacked controls, larger touch targets, viewport-sized map, no sideways scroll
 - [x] Sports adapter: Liiga public game list, Ilves/Tappara home games at Nokia Arena
+- [x] Interaction polish: filled hour track, eased map zoom, map reveal, selected-day scroll,
+      focus rings and reduced-motion support
 
 ## Next
 
