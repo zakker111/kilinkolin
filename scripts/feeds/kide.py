@@ -32,7 +32,7 @@ def fetch():
         return [], f"FAILED: {exc}"
 
     today = dt.date.today()
-    out = []
+    out, seen = [], set()
     for p in products:
         try:
             raw_from = p.get("dateActualFrom")
@@ -49,11 +49,18 @@ def fetch():
             if minutes < 30:
                 # no trustworthy end: let the model fall back to its typical duration
                 minutes = 0
+            # one product per organiser: four clubs selling the same jam are one event, even when
+            # each spells the campus differently ("TAMK C3 Game Studio", "TAMK Games Academy", …)
+            place = " ".join((p.get("place") or "").split())
+            key = (starts.date().isoformat(), starts.strftime("%H:%M"), " ".join(title.lower().split()))
+            if key in seen:
+                continue
+            seen.add(key)
             out.append({
                 "date": starts.date().isoformat(),
                 "time": starts.strftime("%H:%M"),
                 "title": title,
-                "place": (p.get("place") or "").strip(),
+                "place": place,
                 "organizer": (p.get("companyName") or "").strip(),
                 "minutes": minutes,
                 "free": _price(p.get("minPrice")) == 0,

@@ -12,9 +12,17 @@
   let curDay = null;
   let dayEvents = [];
   let selectedId = null;
+  let VENUES = {};
 
   const esc = (s) => String(s == null ? "" : s)
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+  /* the venue's street address, unless the label already is one (calendar venues) */
+  function addrOf(ev) {
+    const v = VENUES[ev.venueId];
+    const a = v && v.address ? String(v.address) : "";
+    return a && a !== ev.venue ? a : "";
+  }
 
   function stamp(raw) {
     const m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}) UTC$/.exec(raw || "");
@@ -35,7 +43,7 @@
     return rows.map((r) => ({
       // the feed omits a start time for a few events; count those at a typical 19:00 start
       date: r[0], time: r[1] || "19:00", title: r[2], venue: r[3],
-      id: r[7], category: r[9], seed: !!r[13]
+      id: r[7], category: r[9], venueId: r[14], seed: !!r[13]
     })).filter((e) => e.id);
   }
 
@@ -100,7 +108,8 @@
     box.className = "panel-detail on";
     box.innerHTML =
       `<div class="pd-title">${esc(ev.title)}</div>` +
-      `<div class="pd-meta">${esc(ev.time)}${esc(end)} · ${esc(ev.venue)}</div>` +
+      `<div class="pd-meta">${esc(ev.time)}${esc(end)} · ${esc(ev.venue)}` +
+      `${addrOf(ev) ? " · " + esc(addrOf(ev)) : ""}</div>` +
       `<div class="pd-meta"><span class="cat cat-${esc(ev.category)}">${esc(CAT_LABEL[ev.category] || "Event")}</span>` +
       `${ev.mid != null ? `<span class="pd-est">≈ ${ev.mid.toLocaleString("fi-FI")} people, estimated</span>` : ""}</div>` +
       `<div class="pd-note">Estimate, not a measurement.</div>`;
@@ -138,7 +147,7 @@
       return `<li class="panelRow${occurring ? " on" : ""}${soon ? " soon" : ""}" data-id="${esc(e.id)}">` +
         `<span class="pr-time">${esc(e.time || "—")}</span>` +
         `<span class="pr-body"><span class="pr-title">${esc(e.title)}</span>` +
-        `<span class="pr-venue">${esc(e.venue)}</span></span>` +
+        `<span class="pr-venue">${esc(e.venue)}${addrOf(e) ? " · " + esc(addrOf(e)) : ""}</span></span>` +
         `<span class="cat cat-${esc(e.category)}">${esc(CAT_LABEL[e.category] || "Event")}</span></li>`;
     }).join("");
     list.querySelectorAll(".panelRow[data-id]").forEach((row) => {
@@ -184,6 +193,12 @@
     }
     renderStatus(data);
     renderFoot(data);
+    try {
+      const vr = await fetch("./geo/venues.json", { cache: "no-store" });
+      if (vr.ok) (await vr.json()).venues.forEach((v) => { VENUES[v.id] = v; });
+    } catch (err) {
+      console.warn("venues.json unavailable", err);
+    }
     const events = toEvents(data.events || []);
     const days = buildDays(events);
 
