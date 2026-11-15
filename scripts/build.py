@@ -427,6 +427,13 @@ def corridors_for(venue, zone_rows, hub_map, attendance_mid, limit=6):
     return out
 
 
+def usable_route(routes, key):
+    """A cached leg worth drawing: a district centroid that sits on the venue itself yields a
+    0 km, two-point route, which is geometry in name only and paints nothing."""
+    rec = routes.get(key)
+    return rec is not None and rec.get("km", 0) >= 0.05
+
+
 def legs_for(venue, zone_rows, routes, hub_names, hub_kinds, attendance_mid):
     """Walking legs along real streets: transit hub -> venue, or nearest district -> venue."""
     if not routes:
@@ -440,15 +447,15 @@ def legs_for(venue, zone_rows, routes, hub_names, hub_kinds, attendance_mid):
         hub_key = f"{venue['id']}|hub:{hub_id}" if hub_id else None
         drive_key = f"{venue['id']}|hub:{hub_id}:drive" if hub_id else None
         zone_key = f"{venue['id']}|zone:{row['zone_id']}"
-        if km <= 3.0 and zone_key in routes:
+        if km <= 3.0 and usable_route(routes, zone_key):
             # close districts: people walk the whole way
             key = zone_key
-        elif km > 3.0 and drive_key in routes:
+        elif km > 3.0 and usable_route(routes, drive_key):
             # far districts: walk to the stop, then tram/bus/train along the road corridor
             key, label = drive_key, hub_names.get(hub_id, row["name"])
-        elif zone_key in routes:
+        elif usable_route(routes, zone_key):
             key = zone_key
-        elif hub_key in routes:
+        elif usable_route(routes, hub_key):
             key, label = hub_key, hub_names.get(hub_id, row["name"])
         if key is None:
             continue
@@ -459,6 +466,8 @@ def legs_for(venue, zone_rows, routes, hub_names, hub_kinds, attendance_mid):
             rec["modes"][m] += row["share"] * s
     legs = []
     for key, rec in agg.items():
+        if rec["km"] < 0.05:
+            continue  # would draw nothing: better to fall back to the straight corridors
         modes = dict(rec["modes"])
         if "|hub:" in key:
             # a hub leg is the last walk; colour it by the transit mode that fed the hub
