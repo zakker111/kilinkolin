@@ -14,6 +14,8 @@ Every event contributes.
   runs 06:00–06:00 next day, and the default hour is the day's busiest across that range.
 - Changed: heat opacity follows the size of the crowd, so a three-person event no longer paints
   the whole city while a busy hour still reaches deep red.
+- Fixed: the rebuild badge formatted its UTC stamp in the browser's timezone, so an early-morning
+  rebuild was labelled with the previous day.
 
 ### 0.7.1 — 2026-11-14
 Weekly refresh of the events and their streets.
