@@ -102,6 +102,11 @@ main{position:relative;z-index:1;max-width:1240px;margin:0 auto;padding:0 16px 2
 .eventTip span{display:block;margin-top:3px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--paper-dim);}
 .eventTip[hidden]{display:none;}
 .modeRow b{margin-left:auto;font-weight:600;}
+.legend-swatches{display:flex;flex-wrap:wrap;gap:4px 9px;margin-top:5px;font-size:8.5px;color:var(--paper);
+  border-top:1px solid rgba(239,232,216,.18);padding-top:5px;}
+.legend-swatches span{display:inline-flex;align-items:center;gap:4px;}
+.legend-swatches i{width:8px;height:8px;border-radius:50%;border:1px solid rgba(255,255,255,.9);flex:none;}
+.legend-swatches .sw{cursor:default;}
 
 .attrib{position:absolute;right:6px;bottom:4px;font-size:9px;font-family:'IBM Plex Mono',monospace;
   color:#3a322a;background:rgba(255,255,255,.75);padding:1px 5px;border-radius:3px;}
@@ -114,6 +119,47 @@ main{position:relative;z-index:1;max-width:1240px;margin:0 auto;padding:0 16px 2
   transition:background .15s ease,transform .15s ease,box-shadow .15s ease;}
 .mapZoom button:hover{background:#fff;transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,.18);}
 .mapZoom button:active{transform:translateY(0);}
+
+/* map + the day's events side by side */
+.mapRow{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;}
+.eventPanel{background:var(--ink-2);border:1px solid var(--line);border-radius:12px;padding:10px 12px;
+  display:flex;flex-direction:column;min-height:0;box-shadow:0 18px 44px rgba(0,0,0,.22);}
+.panel-head{display:flex;align-items:baseline;gap:8px;margin-bottom:7px;}
+.panel-title{font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:.02em;line-height:1;}
+.panel-count{margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:var(--paper-dim);}
+.panel-detail{border:1px dashed var(--line);border-radius:9px;padding:8px 9px;margin-bottom:8px;
+  font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--paper-dim);line-height:1.45;}
+.panel-detail.on{border-style:solid;border-color:rgba(239,232,216,.32);background:rgba(239,232,216,.05);color:var(--paper);}
+.pd-title{font-family:'Inter',system-ui,sans-serif;font-weight:700;font-size:13px;line-height:1.3;}
+.pd-meta{margin-top:4px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:9.5px;color:var(--paper-dim);}
+.pd-est{color:var(--paper);}
+.pd-note{margin-top:5px;font-size:9px;color:var(--amber);}
+.pd-hint{font-size:9.5px;}
+.panelList{list-style:none;margin:0;padding:0;overflow-y:auto;flex:1;min-height:0;}
+.panelRow{display:grid;grid-template-columns:44px minmax(0,1fr) auto;align-items:center;gap:8px;
+  padding:6px 6px;border-radius:7px;cursor:pointer;border-left:2px solid transparent;}
+.panelRow + .panelRow{margin-top:2px;}
+.panelRow:hover,.panelRow.sel{background:rgba(239,232,216,.07);}
+.panelRow.on{border-left-color:var(--brick-2);}
+.panelRow.soon{border-left-color:var(--amber);}
+.panelRow.empty{cursor:default;color:var(--paper-dim);font-family:'IBM Plex Mono',monospace;font-size:10px;grid-template-columns:1fr;}
+.pr-time{font-family:'IBM Plex Mono',monospace;font-size:10.5px;font-variant-numeric:tabular-nums;color:var(--paper);}
+.pr-body{min-width:0;display:flex;flex-direction:column;gap:1px;}
+.pr-title{font-size:11px;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.pr-venue{font-family:'IBM Plex Mono',monospace;font-size:8.5px;color:var(--paper-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.cat{font-family:'IBM Plex Mono',monospace;font-size:8px;letter-spacing:.04em;text-transform:uppercase;
+  padding:1px 5px;border-radius:6px;border:1px solid currentColor;white-space:nowrap;}
+.cat-gigs{color:#e8724f;}
+.cat-sports{color:#7ea2f8;}
+.cat-student{color:#dfa94a;}
+.cat-stage{color:#b79bfa;}
+.cat-culture{color:#5fb8b0;}
+.cat-community{color:#a3adb8;}
+.cat-other{color:#b9b0a2;}
+@media(min-width:1000px){
+  .mapRow{grid-template-columns:minmax(0,1fr) 320px;align-items:stretch;}
+  .eventPanel{height:min(78vh,760px);}
+}
 
 footer{position:relative;z-index:1;max-width:1240px;margin:0 auto;padding:10px 16px 44px;
   border-top:1px solid var(--line);color:var(--paper-dim);font-size:10.5px;line-height:1.7;}
@@ -146,11 +192,16 @@ footer a{color:var(--amber);text-decoration:underline;}
   .legend-ends{font-size:7.5px;gap:8px;}
   .legend-foot{display:none;}
   .legend-dots{font-size:7.5px;margin-top:4px;}
+  .legend-swatches{font-size:7.5px;gap:3px 7px;}
   .mapZoom{top:7px;right:7px;gap:5px;}
   .mapZoom button{width:34px;height:34px;font-size:17px;}
   .attrib{font-size:8px;}
   footer{padding:8px 10px 30px;font-size:10px;}
   .eventTip b{font-size:11px;}
+  .eventPanel{max-height:46vh;padding:8px 10px;}
+  .panel-title{font-size:18px;}
+  .panelList{max-height:32vh;}
+  .pr-title{font-size:10.5px;}
 }
 
 @media(prefers-reduced-motion:reduce){
