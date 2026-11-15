@@ -623,7 +623,7 @@
         const f = S.flows[ev.id] || {};
         const v = S.venues[f.venue_id] || {};
         return {
-          id: ev.id, time: ev.time, title: ev.title, category: ev.category,
+          id: ev.id, time: ev.time, title: ev.title, category: ev.category, venueId: f.venue_id,
           venue: (v.name && f.venue_id !== "tampere_muu") ? v.name : (v.name || ev.venue || ""),
           start: f.start == null ? null : f.start,
           end: f.end == null ? null : f.end,

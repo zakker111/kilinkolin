@@ -2,6 +2,30 @@
 
 ## App
 
+### 0.13.2 — 2026-11-15
+Venue addresses and points corrected across the registry.
+
+- Fixed: 28 venues carried a district name, a neighbouring street number or a point several
+  hundred metres to several kilometres away. Every corrected venue now has a published street
+  address and an OpenStreetMap or official address point, and the map dot and its walking legs
+  start at the same place. The generic `tampere_muu` fallback no longer claims to be in Keskusta.
+- Notable corrections: Tampere-talo (770 m east of its hall), Klubi and Telakka (1.6-1.7 km from
+  Tullikamarin aukio), TTT-Klubi (Hämeenpuisto 34 -> Hallituskatu 19), Hakametsän jäähalli
+  (Ilmarinkatu 10 -> Keltinkatu 2), Nokia Arena (Tampere-talon aukio -> Kansikatu 3), Tavara-asema
+  (Ratapihankatu 21 -> 33), Monttu (Hämeenkatu 17), Bricks (Hämeenkatu 18), G Livelab
+  (Puutarhakatu 1) and Komediateatteri (Lapintie 1 -> 3a, 700 m north).
+- Fixed: ten library venues and four sports venues sat on district centroids, including
+  Koilliskeskuksen kirjasto and Koukkuniemen kirjasto (3.3 km off), Koivistonkylän kirjasto
+  (2.1 km), Kauppi, Tesoma, Pyynikki, Hakametsä, Särkänniemi and Valkeakosken kesäteatteri. All now
+  use their street address and address point.
+- Fixed: F54's approximate flag was stale; its Satakunnankatu 18 address point is exact.
+- Fixed: the panel's day list dropped each event's venue id, so the venue address never rendered
+  even when the data had it. Rows now show `venue · street address` again.
+- Changed: removed 765 stale cached legs for the corrected venues and refetched the event-used legs
+  the current events actually use (about 13,600 km of cached walking geometry). No route now starts at an old
+  venue point.
+- No model or schema change: model 2026.11.5, schema 2, 380 events.
+
 ### 0.13.1 — 2026-11-15
 Two UI fixes from the desktop and phone browser sweep.
 

@@ -20,7 +20,8 @@
 - [x] Street-level heat: walking legs routed over OSM footways, cached (401 legs, 906 km), drawn as
       weighted bands instead of district blobs
 - [ ] Route from individual tram/bus stops rather than district centroids and hubs
-- [ ] Cache invalidation: `routes.py --refresh` when venues change coordinates
+- [ ] Automatic cache invalidation: drop a venue's `routes.json` keys when its coordinates change
+      (done manually for 0.13.2)
 - [ ] Mode split is a distance heuristic — Nokia Arena gets 24 % car despite the adjacent station;
       calibrate against real HSL/Digitransit trip data before trusting the shares
 - [x] Validation gate + GitHub Actions workflow (daily sync, weekly rebuild, Pages deploy)
@@ -36,6 +37,9 @@
 - [x] Release 0.13.0: version bump and README, NOTICE, AGENTS and TODO refreshed to the live
       day-and-hour site
 - [x] 0.13.1 UI fixes: next-day `06:00 +1` label and one category legend row on desktop
+- [x] 0.13.2 address corrections: 28 venues moved to published street addresses and address
+      points, plus the generic fallback; 765 stale route legs dropped, the event-used legs in use
+      refetched, and the panel's venue-address line restored
 - [x] Sports adapter: Liiga public game list, Ilves/Tappara home games at Nokia Arena
 - [x] Feed end times: the Liiga adapter passes the playing time when a game carries one, so the
       hockey egress curve uses a real end instead of the 150-minute default
@@ -139,17 +143,18 @@
   keep their real capacity.
 - **New venues get their capacity from the class prior.** Laulumaja, Save File, the nightclubs and
   the rest carry a `gig` capacity nobody publishes (150-300 seats); treat those figures as priors.
-- **Four places still have no house number on the map.** Monttu (its address is not published
-  anywhere), Bricks (Hämeenkatu, no number in OSM), Valkeakosken kesäteatteri, and the calendar
-  venues that are parks or squares by nature (Keskustori, Hämeenpuisto). They keep an approximate
-  point and `approx: true`.
+- **One fallback venue has no address.** `tampere_muu` (elsewhere in Tampere) is used only when no
+  venue resolves; it now carries a blank address instead of a misleading "Keskusta". Calendar
+  parks and squares (Keskustori, Hämeenpuisto) are real published points with area names, not
+  house numbers.
 - **Calendar routes are seeded by CI.** New venues get their legs from the bounded fetch in the
   workflow (`--max 1500`); until that runs, a brand-new venue uses the straight fallback.
 - **Music, Liiga hockey, Kide student events and the city calendar are published.** Stage, culture
   and community rows come only from the calendar plus the registry venues it names, so a venue that
   lists nowhere else can still be missing.
-- **Coordinates are approximate** (100–300 m) for venues not individually verified; the venues
-  added in 0.12.2 use their OpenStreetMap address point.
+- **Coordinates are address points.** Registry venues were checked against OpenStreetMap and
+  official addresses on 2026-11-15; `approx: true` remains only for `tampere_muu` and generated
+  area venues without a house number.
 - **Mode split is a distance heuristic**, not real routes. Treat shares as indicative.
 - **`tampere-keikat` feed only contains music**, and only future events.
 - **liiga.fi schedule** is now read from `api/v2/games`; the contract is undocumented and may move.

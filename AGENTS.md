@@ -109,6 +109,10 @@ name, and its point must sit on that address — use the OpenStreetMap address p
 `"approx": false`. `"Keskusta"` in the address field is a bug: it moves the dot kilometres away
 and hides the real address from every visitor. The panel and the row list render
 `venue · address` from `web/geo/venues.json`, so a wrong or vague address is visible on the site.
+
+Route geometry is cached by venue ID, not by coordinate. When a venue moves, delete its
+`venue|hub:*` and `venue|zone:*` keys from `registry/routes.json`, rebuild so `flows.json`
+carries the new point, run `scripts/routes.py --from-flow`, then rebuild and validate.
 Capacity for a venue nobody publishes a hall size for stays a class prior; say so in `VERSIONS.md`
 rather than presenting it as published.
 

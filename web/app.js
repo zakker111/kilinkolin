@@ -22,8 +22,18 @@
   /* the venue's street address, unless the label already is one (calendar venues) */
   function addrOf(ev) {
     const v = VENUES[ev.venueId];
-    const a = v && v.address ? String(v.address) : "";
-    return a && a !== ev.venue ? a : "";
+    const a = v && v.address ? String(v.address).trim() : "";
+    const label = String(ev.venue || "").trim();
+    if (!a) return "";
+    const al = a.toLowerCase(), ll = label.toLowerCase();
+    if (al === ll) return "";
+    // calendar places arrive as "Venue, street, postcode"; keep only the part the label lacks
+    if (ll && al.startsWith(ll + ",")) {
+      if (/\d/.test(label)) return "";
+      const rest = a.slice(label.length + 1).trim();
+      return rest && rest.toLowerCase() !== ll ? rest : "";
+    }
+    return a;
   }
 
   function stamp(raw) {
