@@ -71,6 +71,9 @@
 - [ ] Competition factor (two big events same evening split the same catchment)
 - [ ] Parking / tram capacity ceilings on car and transit shares
 - [ ] Student-night egress: model last-service cutoff instead of a flat tail
+- [ ] Event scale: a student practice at an arena currently inherits the arena's capacity, so the
+      estimate reads in the thousands. Needs a per-event size signal (ticket stock, practice /
+      treenit keyword) before that figure means anything.
 
 ### Map
 - [ ] District boundary polygons instead of centroid blobs
@@ -89,6 +92,10 @@
 - **Student events are matched, not geocoded.** Kide gives a place name but no coordinates, so a
   product is only published when its place is already a registry venue; today that is 6 of 67. The
   rest are dropped and logged, never placed on a guessed address.
+- **A student event at a big venue inherits that venue's capacity.** `TTO x PIRATE Kyykkätreenit`
+  runs at Hakametsän jäähalli, so the fill prior multiplies a several-thousand-seat capacity and the
+  page estimates thousands of people for a practice. The range is published with `≈` and the same
+  caveat as every other figure, but treat it as an upper bound until the model has a size signal.
 - **Music, Liiga hockey and Kide student events are published.** Stage, culture and community
   adapters are still unwired, and their `SAMPLE` rows stay out of the build, so those categories
   are empty.
@@ -96,6 +103,8 @@
 - **Mode split is a distance heuristic**, not real routes. Treat shares as indicative.
 - **`tampere-keikat` feed only contains music**, and only future events.
 - **liiga.fi schedule** is now read from `api/v2/games`; the contract is undocumented and may move.
+- **Kide's API** is likewise undocumented (`api.kide.app/api/products?city=Tampere`); a shape
+  change shows up as `source_status.student` = `FAILED`, not as a broken page.
 - **Tile provider policy**: the default OSM tile service is fine for a small site but has no
   SLA; swap `TILE_URL` for a paid/self-hosted provider if traffic grows.
 - **Corridors are schematic** straight-ish lines, not street routing.
@@ -108,3 +117,5 @@
   while heat is shown.
 - Corridor geometry comes from our own zone→hub→venue model, never stored Google Directions content.
 - Estimates are never written back as observations.
+- A feed's place string is never turned into coordinates by guesswork: if the venue registry does
+  not already hold that venue and its address, the event is dropped and logged.
