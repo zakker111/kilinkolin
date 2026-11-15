@@ -68,9 +68,25 @@ ARRIVAL = {
 }
 EGRESS = [(0, .30), (10, .30), (20, .18), (30, .12), (45, .10)]
 
+# approximate event length: the feed has no end time, so the way out starts after a typical run
+DURATION_MIN = {"gigs": 150, "sports": 150, "student": 300, "stage": 150,
+                "culture": 120, "community": 120, "other": 120}
+DURATION_SUB = {"karaoke": 180, "party": 300, "sitsit": 300, "film": 120,
+                "exhibition": 180, "comedy": 120, "dance": 120}
+
 
 def log(*a):
     print(*a, file=sys.stderr)
+
+
+def clock_minutes(s):
+    """Same convention as the page: 02:00–05:59 belongs to the previous night."""
+    try:
+        h, m = (int(x) for x in (s or "19:00").split(":"))
+    except (TypeError, ValueError):
+        return 19 * 60
+    v = h * 60 + m
+    return v + 24 * 60 if v < 6 * 60 else v
 
 
 def hav_km(a, b):
@@ -341,7 +357,7 @@ def legs_for(venue, zone_rows, routes, hub_names, hub_kinds, attendance_mid):
         elif zone_key in routes:
             key = zone_key
         elif hub_key in routes:
-            key, label = hub_key, hub_names.get(hub_id, row["name"])
+            key, label = hub_key, hubs[:0] and None or hub_names.get(hub_id, row["name"])
         if key is None:
             continue
         rec = agg.setdefault(key, {"share": 0.0, "modes": defaultdict(float), "name": label,
@@ -468,6 +484,14 @@ def build(mode="full"):
         by_cat[e["category"]] += 1
         by_area[venue["area"]] += 1
 
+        start_min = clock_minutes(e["time"])
+        duration = DURATION_SUB.get(e["sub"], DURATION_MIN.get(e["category"], 120))
+        end_min = start_min + duration
+        egress = []
+        for idx, (t, s) in enumerate(EGRESS):
+            nxt = EGRESS[idx + 1][0] if idx + 1 < len(EGRESS) else t + 15
+            egress.append({"t": t, "share": s, "span": max(5, nxt - t)})
+
         display_venue = venue["name"] if venue["id"] != "tampere_muu" else (e["venue_raw"] or venue["name"])
         rows.append([
             e["date"], e["time"], e["title"], display_venue,
@@ -481,8 +505,9 @@ def build(mode="full"):
             "zones": zone_rows[:8],
             "rest_share": round(max(0.0, 1 - sum(z["share"] for z in zone_rows[:8])), 4),
             "modes": modes, "legs": legs, "corridors": corridors,
+            "start": start_min, "end": end_min,
             "arrival": [{"t": t, "share": s} for t, s in ARRIVAL[cls]],
-            "egress": [{"t": t, "share": s} for t, s in EGRESS],
+            "egress": egress,
         })
         ev_geo.append({"id": eid, "venue_id": venue["id"], "lat": venue["lat"], "lon": venue["lon"],
                        "date": e["date"], "attendance": att["mid"], "interest": interest["score"]})

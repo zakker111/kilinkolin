@@ -75,7 +75,8 @@
       `Every number is an <b>estimate</b> from a population model — not measured attendance, not tracking. ` +
       `Basemap © OpenStreetMap contributors. Music data from ` +
       `<a href="https://github.com/zakker111/tampere-keikat" target="_blank" rel="noopener">Tampere Keikat</a> (MIT); ` +
-      `rows marked SAMPLE are placeholders. Events without a listed start are counted at 19:00.`;
+      `rows marked SAMPLE are placeholders. Events without a listed start are counted at 19:00. ` +
+      `The heat counts people travelling in before a start and heading home after an estimated end.`;
   }
 
   async function load() {
