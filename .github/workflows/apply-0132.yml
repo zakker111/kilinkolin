@@ -1,0 +1,41 @@
+name: Apply 0.13.2 address corrections
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply source corrections
+        run: python3 .github/apply-0132.py
+      - name: Build with corrected venues
+        run: python3 scripts/build.py --city tampere --mode full
+      - name: Fetch moved-venue routes
+        run: |
+          python3 scripts/routes.py --from-flow --max 1500
+          python3 scripts/routes.py --max 1500
+      - name: Rebuild with new geometry
+        run: python3 scripts/build.py --city tampere --mode full
+      - name: Validate
+        run: python3 scripts/validate.py
+      - name: Commit generated data and remove one-shot files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add README.md TODO.md VERSIONS.md AGENTS.md web/config.js web/app.js web/map.js registry/venues.json registry/routes.json web/data.json web/geo
+          git rm .github/apply-0132.py .github/workflows/apply-0132.yml
+          git commit -m "Fix venue addresses and restore panel address line"
+          git push
+      - name: Trigger Pages build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run build.yml --ref main
