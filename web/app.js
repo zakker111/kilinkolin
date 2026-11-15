@@ -9,7 +9,8 @@
     const m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}) UTC$/.exec(raw || "");
     if (!m) return raw || "unknown";
     const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]));
-    return d.toLocaleDateString("en-GB", { day: "numeric", month: "short" }) + `, ${m[4]}:${m[5]} UTC`;
+    // the stamp is UTC; format it in UTC so a 00:16 rebuild does not show yesterday
+    return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" }) + `, ${m[4]}:${m[5]} UTC`;
   }
 
   const dayLabel = (iso) => {
