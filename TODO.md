@@ -48,6 +48,9 @@
 - [x] Every published event resolves to a venue with a real address: a street address found in a
       row now outranks the generic fallback, and Finlaysonin kirkko (Puuvillatehtaankatu 2) is
       registered with its OSM coordinates and the parish's published capacity
+- [x] Sunday retry cron (`0 6 * * 0`) after the weekly 04:00 rebuild
+- [x] A total feed failure keeps the last good data: the build refuses to write an empty
+      map and exits non-zero, so the workflow stops before committing or deploying
 
 ## Next
 

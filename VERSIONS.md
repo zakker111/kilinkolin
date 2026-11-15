@@ -2,6 +2,17 @@
 
 ## App
 
+### 0.11.2 — 2026-11-15
+A failed rebuild no longer blanks the map.
+
+- Added: a second Sunday cron (`0 6 * * 0`) after the weekly `0 4 * * 0` rebuild, so a failed
+  weekly run gets one automatic retry the same morning.
+- Fixed: when every feed fails, or nothing survives the date filter, the build leaves
+  `web/data.json` and `web/geo/*` untouched and exits non-zero, so the workflow stops before
+  committing or deploying. Before, a total feed outage produced an empty event list and replaced
+  the live data with a blank map.
+- Note: one failed source still publishes the others; only an empty result stops the build.
+
 ### 0.11.1 — 2026-11-15
 Every published event sits on a venue with a real address.
 
