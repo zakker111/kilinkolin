@@ -43,6 +43,7 @@
       btn.onclick = () => {
         const min = window.KMap.setDay(btn.dataset.day);
         markDay(btn.dataset.day);
+        revealDay(btn);
         setTime(min, true);
       };
     });
@@ -53,9 +54,22 @@
     document.querySelectorAll(".day").forEach((b) => b.classList.toggle("on", b.dataset.day === day));
   }
 
+  function revealDay(btn) {
+    if (!btn) return;
+    const smooth = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    btn.scrollIntoView({ inline: "center", block: "nearest", behavior: smooth ? "smooth" : "auto" });
+  }
+
+  function paintSlider() {
+    const el = $("timeSlider");
+    const min = +el.min, max = +el.max;
+    el.style.setProperty("--fill", ((+el.value - min) / (max - min) * 100).toFixed(2) + "%");
+  }
+
   function setTime(min, moveSlider) {
     if (moveSlider) $("timeSlider").value = String(min);
     $("timeLabel").textContent = window.KMap.clockLabel(min);
+    paintSlider();
   }
 
   function renderStatus(meta) {
@@ -98,6 +112,7 @@
       const first = days[0];
       const min = window.KMap.setDay(first);
       markDay(first);
+      revealDay(document.querySelector(`.day[data-day="${first}"]`));
       setTime(min, true);
     } else {
       $("estimate").innerHTML = `<div class="e-line">No events in the feed right now.</div>`;
