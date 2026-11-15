@@ -7,7 +7,8 @@
   const HEAT = ["#f4c20d", "#ee9f18", "#e66f1a", "#d13319", "#960d0a"]; // legend swatches only
   const TILE = 256;
 
-  const S = { events: [], flows: {}, venues: {}, zoneMeta: null, routes: {}, map: null, dotHits: [] };
+  const S = { events: [], flows: {}, venues: {}, zoneMeta: null, routes: {}, map: null, dotHits: [],
+              hoverId: null, onHover: null, day: null, minutes: 19 * 60 };
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
@@ -55,6 +56,26 @@
     schedule() {
       if (this._raf) return;
       this._raf = requestAnimationFrame(() => { this._raf = null; this.draw(); });
+    }
+    hitAt(x, y) {
+      return S.dotHits.find((h) => Math.hypot(h.x - x, h.y - y) < 16) || null;
+    }
+    /* hovering a dot names the event; dragging still pans */
+    _hover(e) {
+      const r = this.canvas.getBoundingClientRect();
+      const mx = e.clientX - r.left, my = e.clientY - r.top;
+      const hit = this.hitAt(mx, my);
+      this.canvas.style.cursor = hit ? "pointer" : "grab";
+      const id = hit ? hit.ev.id : null;
+      if (id === S.hoverId) {
+        if (hit) showTipAt(mx, my); else if (S.hideTip) S.hideTip();
+        return;
+      }
+      S.hoverId = id;
+      if (hit) showTipAt(mx, my);
+      else if (S.hideTip) S.hideTip();
+      if (S.onHover) S.onHover(id);
+      this.schedule();
     }
     draw() {
       const z = Math.max(3, Math.min(CFG.TILE_MAX_ZOOM || 18, Math.round(this.zoom)));
@@ -141,7 +162,7 @@
         if (S.hideTip) S.hideTip();
       });
       c.addEventListener("pointermove", (e) => {
-        if (!drag) return;
+        if (!drag) { this._hover(e); return; }
         const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
         drag = { x: e.clientX, y: e.clientY };
         const cx = this.worldX(this.center.lon, this._z) - dx / this._scale;
@@ -156,6 +177,13 @@
       };
       c.addEventListener("pointerup", end);
       c.addEventListener("pointercancel", () => end(null));
+      c.addEventListener("pointerleave", () => {
+        if (drag) return;
+        S.hoverId = null;
+        if (S.hideTip) S.hideTip();
+        if (S.onHover) S.onHover(null);
+        this.schedule();
+      });
       c.addEventListener("wheel", (e) => {
         e.preventDefault();
         const r = c.getBoundingClientRect();
@@ -453,9 +481,14 @@
       const n = taken[v.id] = (taken[v.id] || 0) + 1;
       if (n > 1) { const a = (n - 1) * 2.1; p.x += Math.cos(a) * 7; p.y += Math.sin(a) * 7; }
       const colour = DOT_COLOURS[ev.category] || "#4a0f08";
-      ctx.beginPath(); ctx.arc(p.x, p.y, 5.5, 0, Math.PI * 2);
+      const on = S.hoverId != null && ev.id === S.hoverId;
+      if (on) {
+        ctx.beginPath(); ctx.arc(p.x, p.y, 11, 0, Math.PI * 2);
+        ctx.lineWidth = 3; ctx.strokeStyle = "rgba(250,247,241,.95)"; ctx.stroke();
+      }
+      ctx.beginPath(); ctx.arc(p.x, p.y, on ? 7.5 : 5.5, 0, Math.PI * 2);
       ctx.fillStyle = colour; ctx.fill();
-      ctx.lineWidth = 2; ctx.strokeStyle = "rgba(255,255,255,.95)"; ctx.stroke();
+      ctx.lineWidth = 2; ctx.strokeStyle = on ? "#171310" : "rgba(255,255,255,.95)"; ctx.stroke();
       S.dotHits.push({ x: p.x, y: p.y, ev, venue: v });
     });
   }
@@ -551,7 +584,12 @@
     S.map.paint = paintFlow;
     S.map.onTap = (e) => {
       const r = $("mapCanvas").getBoundingClientRect();
-      showTipAt(e.clientX - r.left, e.clientY - r.top);
+      const mx = e.clientX - r.left, my = e.clientY - r.top;
+      const hit = S.map.hitAt(mx, my);
+      showTipAt(mx, my);
+      // tapping a dot names it in the panel too, for phones without hover
+      const id = hit ? hit.ev.id : null;
+      if (id !== S.hoverId) { S.hoverId = id; if (S.onHover) S.onHover(id); S.map.schedule(); }
     };
     S.hideTip = () => { const t = $("eventTip"); if (t) t.hidden = true; };
     S.map.setCenter(61.4978, 23.7610, 13.2);
@@ -566,9 +604,36 @@
 
   window.KMap = {
     init,
+    onHover(cb) { S.onHover = cb; },
+    currentDay() { return S.day; },
+    now() { return S.minutes; },
+    /* every event on the chosen day, with the minutes the map uses */
+    dayEvents() {
+      return S.events.filter((ev) => ev.date === S.day).map((ev) => {
+        const f = S.flows[ev.id] || {};
+        const v = S.venues[f.venue_id] || {};
+        return {
+          id: ev.id, time: ev.time, title: ev.title, category: ev.category,
+          venue: (v.name && f.venue_id !== "tampere_muu") ? v.name : (v.name || ev.venue || ""),
+          start: f.start == null ? null : f.start,
+          end: f.end == null ? null : f.end,
+          mid: f.attendance ? f.attendance.mid : null,
+          seed: !!ev.seed,
+        };
+      }).sort((a, b) => (a.start == null ? 1e9 : a.start) - (b.start == null ? 1e9 : b.start));
+    },
+    focusEvent(id) {
+      const next = id || null;
+      if (next === S.hoverId) return;
+      S.hoverId = next;
+      if (S.map) S.map.schedule();
+    },
+    refresh() { refresh(); },
     setDay(day) {
       if (!day) return;
       if (S.hideTip) S.hideTip();
+      S.hoverId = null;
+      if (S.onHover) S.onHover(null);
       S.day = day;
       S.minutes = peakMinute(day);
       refresh();
