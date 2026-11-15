@@ -68,7 +68,9 @@ jobs:
           # legs the current flows draw, then any missing legs for venues that are new
           # (calendar venues arrive with their own coordinates and need their own routes)
           python3 scripts/routes.py --from-flow --max 300
-          python3 scripts/routes.py --max 400
+          # generous ceiling: the whole backlog is fetched in one run rather than trickling in
+          # over days, so no published event is left on the straight-line fallback
+          python3 scripts/routes.py --max 1500
 
       - name: Rebuild with the new routes
         run: python3 scripts/build.py --city tampere --mode full

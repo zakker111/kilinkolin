@@ -76,6 +76,28 @@ def fetch(a, b, tries=3, profile="foot"):
     return None
 
 
+def venue_catalogue(registry_venues, hubs, generated_path=None):
+    """Registry venues plus the generated ones, each with at least one transit hub.
+
+    Calendar events put a venue in `web/geo/venues.json` that the registry does not list yet (a
+    library hall, a school auditorium); those carry their own published coordinates, so their legs
+    can be routed like any other venue. A venue whose entry lists no hub at all (a church, a village
+    hall) would otherwise have no leg the seeder could fetch, so it falls back to its nearest
+    registered hub — the same assumption `build.py` makes for the same venues.
+    """
+    venues = [dict(v) for v in registry_venues]
+    known = {v["id"] for v in venues}
+    if generated_path and os.path.exists(generated_path):
+        for v in load(generated_path).get("venues", []):
+            if v["id"] not in known and v.get("lat") and v.get("lon"):
+                venues.append(dict(v))
+    for v in venues:
+        if not v.get("hubs") and hubs:
+            here = (v["lat"], v["lon"])
+            v["hubs"] = sorted(hubs, key=lambda k: hav_km((hubs[k]["lat"], hubs[k]["lon"]), here))[:1]
+    return venues
+
+
 def wanted(venues, zones, hubs):
     """Legs to cache, keyed exactly as build.py expects."""
     legs = {}
@@ -141,15 +163,7 @@ def main():
     zones_doc = load(os.path.join(ROOT, "registry", "zones.json"))
     venues, zones, hubs = venues_doc["venues"], zones_doc["zones"], venues_doc["transit_hubs"]
 
-    # Calendar events put a venue in web/geo/venues.json that the registry does not list yet
-    # (a library hall, a school auditorium). They carry their own published coordinates, so
-    # their legs can be routed like any other venue instead of falling back to straight lines.
-    generated = os.path.join(ROOT, "web", "geo", "venues.json")
-    if os.path.exists(generated):
-        known = {v["id"] for v in venues}
-        for v in load(generated).get("venues", []):
-            if v["id"] not in known and v.get("lat") and v.get("lon"):
-                venues.append(v)
+    venues = venue_catalogue(venues, hubs, os.path.join(ROOT, "web", "geo", "venues.json"))
 
     doc = {"schema_version": 1, "source": "FOSSGIS OSRM foot (OpenStreetMap, ODbL)"}
     if os.path.exists(CACHE) and not args.refresh:
