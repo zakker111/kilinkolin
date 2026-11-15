@@ -202,6 +202,25 @@ def resolve_venue(raw, alias_idx, venues):
     return None
 
 
+def resolve_by_address(text, venues):
+    """Find a registry venue whose street address appears in the feed's text.
+
+    Some feeds put the address where the venue belongs and the admission in the venue
+    field ("Ilmainen" + "… Puuvillatehtaankatu 2"). A street name with a house number is
+    a real location, so it is allowed to place the event — nothing is guessed here.
+    """
+    low = (text or "").lower()
+    if not low:
+        return None
+    for v in venues:
+        if v["id"] == "tampere_muu":
+            continue
+        addr = (v.get("address") or "").strip().lower()
+        if len(addr) > 6 and any(c.isdigit() for c in addr) and addr in low:
+            return v
+    return None
+
+
 KIND_ALIASES = {
     "sport": "sports", "music_gig": "gigs", "gig": "gigs",
     "theatre": "stage", "comedy": "stage", "dance": "stage",
@@ -514,6 +533,9 @@ def build(mode="full", with_samples=False):
             continue
         date, time_s, title, venue_raw, genre, free, url = row[:7]
         venue = resolve_venue(venue_raw, alias_idx, VENUES)
+        if not venue or venue["id"] == "tampere_muu":
+            # a real street address in the row beats the generic fallback venue
+            venue = resolve_by_address(f"{venue_raw} {title}", VENUES) or venue
         if not venue:
             unmatched[venue_raw] += 1
             venue = next(v for v in VENUES if v["id"] == "tampere_muu")
