@@ -2,6 +2,25 @@
 
 ## App
 
+### 0.12.1 — 2026-11-15
+The route cache is complete: no event falls back to a straight line.
+
+- Fixed: `web/geo/venues.json` never carried a venue's `hubs`, so `scripts/routes.py` saw every
+  calendar venue as hub-less and could not build its transit legs; registry venues with an empty
+  `hubs` list (Kangasalan kirkko, Ylisen kartano, three libraries, Valkeakosken kesäteatteri) had no
+  leg the seeder could fetch at all. 88 of 339 events sat on the straight-line fallback.
+- Fixed: hub-less venues now use their nearest registered hub (`venue_catalogue()` in
+  `scripts/routes.py`, the same rule in the build). Legs wanted went from 1,257 to 2,493.
+- Fixed: a district centroid sitting on the venue produced a 0 km, two-point "route" — geometry in
+  name only. Legs shorter than 50 m are now ignored and the hub leg is drawn instead, so Kangasalan
+  kirkko gets the 14.0 km tram corridor from Hervanta and Ylisen kartano the 7.4 km bus leg from
+  Tesoma.
+- Changed: the workflow's second fetch pass runs `--max 1500`, so a backlog clears in one run
+  instead of trickling in over days.
+- Verified live: 339 events, 0 without street legs, 0 corridor-only flows, 0 legs under 50 m,
+  3,150 legs over 7,050 km of OSM footways, 701 distinct routes shipped to the browser.
+- Note: the model is unchanged — the same estimated flows, now drawn on real streets.
+
 ### 0.12.0 — 2026-11-15
 Stage, culture, library and community events from the city's own calendar.
 

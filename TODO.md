@@ -57,6 +57,8 @@
       address, nearest district and hub) instead of falling back to `tampere_muu`
 - [x] Far venues (Kangasala, Nokia, Hämeenkyrö) fall back to their nearest districts, so they
       no longer produce an event with no origin zones
+- [x] Route cache complete: every venue has a hub, every flow draws real street geometry
+      (0 corridor-only flows, 0 legs under 50 m; 3,150 legs over 7,050 km)
 
 ## Next
 
@@ -64,8 +66,6 @@
 - [x] `feeds/city_events.py` — the whole public calendar in one call
       (`api/search/internal-content-fetch?lang=fi&country=FI&q=`), which also covers the library
       programme; topic-by-topic walking is no longer needed
-- [ ] City calendar: fetch the remaining legs so every calendar venue draws streets rather than
-      fallback corridors (59 of 147 flows had geometry after the first seeded run)
 - [ ] City calendar: per-event size signal, so a library talk and a Tampere-talo gala do not both
       read as the small-venue floor
 - [x] Student: `scripts/feeds/kide.py` reads Kide's public Tampere product list (real start and
@@ -119,9 +119,8 @@
   hall size, so those events sit on the model's small-venue floor unless the listing carries
   `maxParticipants`. Big calendar events at registry venues (Tampere-talo, Vapriikki, Nokia Arena)
   keep their real capacity.
-- **Calendar routes are still filling in.** New venues get their street legs from the bounded CI
-  fetch (700 legs per run), so early flows use the straight fallback corridors until the cache
-  catches up.
+- **Calendar routes are seeded by CI.** New venues get their legs from the bounded fetch in the
+  workflow (`--max 1500`); until that runs, a brand-new venue uses the straight fallback.
 - **Music, Liiga hockey, Kide student events and the city calendar are published.** Stage, culture
   and community rows come only from the calendar plus the registry venues it names, so a venue that
   lists nowhere else can still be missing.
@@ -138,7 +137,6 @@
   up as `source_status.culture` = `FAILED`.
 - **Tile provider policy**: the default OSM tile service is fine for a small site but has no
   SLA; swap `TILE_URL` for a paid/self-hosted provider if traffic grows.
-- **Corridors are schematic** straight-ish lines, not street routing.
 
 ## Decisions
 
