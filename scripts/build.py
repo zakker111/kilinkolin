@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import hashlib
 import json
 import math
 import os
@@ -20,6 +21,7 @@ from zoneinfo import ZoneInfo
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from feeds import kide as kide_feed  # noqa: E402  (adapter lives beside this file)
+from feeds import city_events as city_feed  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WEB = os.path.join(ROOT, "web")
@@ -375,6 +377,11 @@ def gravity(ev, venue, zones):
         time_h = max(0.15, km / (18 if km > 6 else 7))
         weight = z["pop"] * profile / (time_h ** 1.6)
         rows.append((z, km, weight))
+    if not rows:
+        # A venue beyond the usual catchment (Kangasala, Nokia, Hämeenkyrö): the closest
+        # districts still send people, so use the nearest ones instead of publishing an
+        # event with no origin at all.
+        rows = nearest_rows(ev, venue, zones)
     total = sum(w for _, _, w in rows) or 1.0
     out = []
     for z, km, w in rows:
@@ -385,6 +392,18 @@ def gravity(ev, venue, zones):
                     "km": round(km, 1), "modes": modes_for(km, z.get("rail", False))})
     out.sort(key=lambda r: -r["share"])
     return cls, out
+
+
+def nearest_rows(ev, venue, zones, count=3):
+    ranked = sorted(zones, key=lambda z: hav_km((z["lat"], z["lon"]), (venue["lat"], venue["lon"])))
+    out = []
+    for z in ranked[:count]:
+        km = hav_km((z["lat"], z["lon"]), (venue["lat"], venue["lon"])) * 1.3
+        student_w = z["student"] if ev["category"] == "student" else 1 + (z["student"] - 1) * 0.35
+        profile = (0.55 + 0.45 * z.get("transit", .8)) * student_w
+        time_h = max(0.15, km / (18 if km > 6 else 7))
+        out.append((z, km, z["pop"] * profile / (time_h ** 1.6)))
+    return out
 
 
 def corridors_for(venue, zone_rows, hub_map, attendance_mid, limit=6):
@@ -495,19 +514,82 @@ def kide_rows(alias_idx):
     return rows, status
 
 
+CITY_PREFIX = "city-"
+
+
+def norm_title(title):
+    """Loose key for spotting the same event published by two sources."""
+    return " ".join("".join(c for c in (title or "").lower() if c.isalnum() or c.isspace()).split())
+
+
+def place_name(address):
+    """Readable label for a place that is not in the venue registry."""
+    return (address or "").split(",")[0].strip() or address or "Tampere"
+
+
+def nearest_zone(lat, lon):
+    if not ZONES:
+        return "Tampere"
+    zone = min(ZONES, key=lambda z: hav_km((z["lat"], z["lon"]), (lat, lon)))
+    return zone["name"]
+
+
+def nearest_hubs(lat, lon):
+    """The closest registered transit hub: the same modelling assumption the registry venues use."""
+    if not HUBS:
+        return []
+    ranked = sorted(HUBS, key=lambda k: hav_km((HUBS[k]["lat"], HUBS[k]["lon"]), (lat, lon)))
+    return ranked[:1]
+
+
+def place_venue(item):
+    """Register a venue from the city calendar's own coordinates and address.
+
+    The calendar publishes the exact point of every location, so this is a real location and
+    not a guess. Listings that round to the same point share one venue.
+    """
+    vid = CITY_PREFIX + hashlib.sha1(
+        f"{round(item['lat'], 5)},{round(item['lon'], 5)}".encode()).hexdigest()[:8]
+    for v in VENUES:
+        if v["id"] == vid:
+            return v
+    venue = {
+        "id": vid, "name": place_name(item["place"]),
+        "lat": item["lat"], "lon": item["lon"],
+        "area": nearest_zone(item["lat"], item["lon"]),
+        "kind": "culture", "capacity": {"gig": int(item.get("max_participants") or 0)},
+        "hubs": nearest_hubs(item["lat"], item["lon"]),
+        "approx": False, "address": item["place"],
+        "source": "tampere city calendar",
+    }
+    VENUES.append(venue)
+    return venue
+
+
+def venue_record(v):
+    row = {"id": v["id"], "name": v["name"], "lat": v["lat"], "lon": v["lon"],
+           "area": v["area"], "kind": v["kind"], "capacity": v["capacity"],
+           "approx": v.get("approx", False)}
+    if v.get("address"):
+        row["address"] = v["address"]
+    return row
+
+
 # ------------------------------------------------------------------- build
 ZONES = []
 VENUES = []
+HUBS = {}
 
 
 def build(mode="full", with_samples=False):
-    global ZONES, VENUES
+    global ZONES, VENUES, HUBS
     os.makedirs(GEO, exist_ok=True)
     venues_doc = load_json(os.path.join(ROOT, "registry", "venues.json"))
     zones_doc = load_json(os.path.join(ROOT, "registry", "zones.json"))
     VENUES = venues_doc["venues"]
     ZONES = zones_doc["zones"]
     hubs = venues_doc["transit_hubs"]
+    HUBS = hubs
     alias_idx = build_alias_index(VENUES)
 
     routes_path = os.path.join(ROOT, "registry", "routes.json")
@@ -522,8 +604,9 @@ def build(mode="full", with_samples=False):
     seed = load_json(os.path.join(ROOT, "data", "seed_events.json")) if with_samples else {"events": []}
     sports_rows, sports_status = fetch_liiga()
     student_rows, student_status = kide_rows(alias_idx)
+    city_items, city_status = city_feed.fetch()
     status = {"music": music_status, "seed": "ON" if with_samples else "OFF",
-              "sports": sports_status, "student": student_status}
+              "sports": sports_status, "student": student_status, "culture": city_status}
 
     events = []
     unmatched = Counter()
@@ -568,6 +651,35 @@ def build(mode="full", with_samples=False):
             "end_min": end_min_from_feed,
         })
 
+    # Theatre, culture and community rows from the city calendar. Each one carries its own
+    # published coordinates, so an unregistered place becomes a real venue instead of a fallback.
+    seen_titles = {(e["date"], norm_title(e["title"])) for e in events}
+    city_kept, city_dup, city_new = 0, 0, 0
+    for item in city_items:
+        key = (item["date"], norm_title(item["title"]))
+        if key in seen_titles:
+            city_dup += 1
+            continue
+        venue = resolve_venue(item["place"], alias_idx, VENUES) or resolve_by_address(item["place"], VENUES)
+        if not venue or venue["id"] == "tampere_muu":
+            venue = place_venue(item)
+            city_new += 1
+        category, sub3 = classify(item["kind"], item["sub"], None, item["title"])
+        start_min = clock_minutes(item["time"])
+        end_min = start_min + item["minutes"] if item["minutes"] else None
+        seen_titles.add(key)
+        city_kept += 1
+        events.append({
+            "date": item["date"], "time": item["time"], "title": item["title"],
+            "venue_raw": item["place"], "venue": venue, "free": bool(item["free"]),
+            "url": item["url"], "hour": int(item["time"].split(":")[0]),
+            "legacy_genre": sub3, "category": category, "sub": sub3,
+            "kind": item["kind"], "seed": False, "end_min": end_min,
+        })
+    if city_items:
+        log(f"[city] {city_kept} events placed ({city_new} on a new calendar location), "
+            f"{city_dup} duplicates of another source skipped")
+
     if unmatched:
         log(f"[venues] unresolved strings mapped to fallback: {dict(unmatched)}")
 
@@ -578,7 +690,7 @@ def build(mode="full", with_samples=False):
     # A bad network day must not replace the page with an empty map. If every feed failed (or
     # nothing survived the date filter) leave web/data.json and web/geo exactly as they are and
     # exit non-zero, so the workflow stops before committing or deploying the last good data away.
-    feeds = {k: status[k] for k in ("music", "sports", "student")}
+    feeds = {k: status[k] for k in ("music", "sports", "student", "culture")}
     failed = [k for k, v in feeds.items() if str(v).startswith("FAILED")]
     if not events or len(failed) == len(feeds):
         reason = ("every feed failed" if len(failed) == len(feeds)
@@ -640,15 +752,12 @@ def build(mode="full", with_samples=False):
         "generated": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
         "schema_version": SCHEMA_VERSION,
         "model_version": MODEL_VERSION,
-        "source_note": "Music from tampere-keikat (read-only), hockey fixtures from the Liiga game list, student events from Kide. Every row comes from a published feed; the SAMPLE seed file is only used with --with-samples.",
+        "source_note": "Music from tampere-keikat (read-only), hockey fixtures from the Liiga game list, student events from Kide, stage/culture/community events from the Tampere city calendar. Every row comes from a published feed; the SAMPLE seed file is only used with --with-samples.",
         "source_status": status,
         "coverage": {"by_category": dict(by_cat), "by_area": dict(by_area), "total": len(rows)},
         "events": rows,
     }
-    venues_out = {"schema_version": 1, "hubs": hubs, "venues": [
-        {"id": v["id"], "name": v["name"], "lat": v["lat"], "lon": v["lon"], "area": v["area"],
-         "kind": v["kind"], "capacity": v["capacity"], "approx": v.get("approx", False)}
-        for v in VENUES]}
+    venues_out = {"schema_version": 1, "hubs": hubs, "venues": [venue_record(v) for v in VENUES]}
 
     write(os.path.join(WEB, "data.json"), data_doc)
     write(os.path.join(GEO, "venues.json"), venues_out)
