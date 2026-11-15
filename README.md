@@ -1,51 +1,74 @@
 # Kilinkolin
 
-An **estimated crowd-flow map** for events in Tampere: pick a day and an event, and see where its
-crowd comes from, how it travels, and when it arrives. No lists, no clutter — just the map.
-Kilinkolin is a made-up name ("kilinkolin" is the sitsit toast).
+An **estimated crowd-flow heat map** for events in Tampere: pick a day, drag the hour, and see
+where the estimated crowd is on the streets at that moment. The map is the answer; the panel
+names what is on.
 
-Live: https://zakker111.github.io/kilinkolin/
+Live: https://zakker111.github.io/kilinkolin/ · **v0.13.0** · model **2026.11.5** · schema **2**
 
 ## What it does
 
-- **Origin heat map** — dark red = more likely origin, pale rose = less likely, on an
-  OpenStreetMap basemap. No API key needed.
-- **Corridors** — mode-coloured routes from the main origins, with moving arrival dots.
-- **Time scrubber** — 2 hours before to 1 hour after the start; the arrival dots move with it.
-- **Event panel** — estimated attendance with range, interest score and its signals,
-  origin split, mode split, arrival profile.
+- **Street heat** — a density field over real walking routes from every district to every event
+  happening that day. Dark red is the busiest streets, yellow the quietest.
+- **Arrivals and departures** — the heat includes people walking to events and people leaving
+  them, so a venue keeps its crowd through the evening instead of going dark at the start.
+- **Day strip + hour scrubber** — 15-minute steps from 06:00 to 06:00 the next day. Moving the
+  hour repaints the heat and updates the estimate.
+- **What's on** — the day's events in start order with venue and address, the event under the
+  pointer expanded, and "occurring now" / "soon" marks for the chosen hour.
+- **Event dots** — gigs red, sports blue, student parties amber, stage purple, culture teal and
+  community grey. Tap or click a dot for its title, time and venue.
+- **Phone layout** — the page detects a phone (`html.is-mobile`) from a narrow or coarse-pointer
+  viewport, uses a 50dvh map, a compact legend, larger touch targets and safe-area padding, and
+  never scrolls sideways.
 - Pan, wheel-zoom and ± buttons on the map itself.
 
-Every number is an estimate: `≈`, with a range. No tracking, no personal data, no claim of
-measured attendance.
+Every number is an estimate: `≈`, with a range. There is no tracking, no personal data and no
+claim of measured attendance.
+
+## Data sources
+
+- Music: [Tampere Keikat](https://github.com/zakker111/tampere-keikat), read-only.
+- Sports: the public Liiga game list, filtered to Ilves and Tappara home games at Nokia Arena.
+- Student: Kide's public Tampere product list. Kide publishes no coordinates, so a product is
+  placed only when its venue already exists in the registry; the rest are dropped and logged.
+- Stage, culture, library and community: Tampereen tapahtumakalenteri, which publishes both a
+  point and a street address for each location.
+
+`data/seed_events.json` holds SAMPLE placeholders and is **not** read by the normal build. It is
+loaded only with `--with-samples`, and `validate.py` refuses to publish a placeholder.
+
+## Performance
+
+- Browser route geometry is simplified at build time (Douglas-Peucker, ~9 m) and rounded to five
+  decimals. The full OSRM geometry stays in `registry/routes.json`.
+- JSON is fetched with normal HTTP caching, and phone rendering caps canvas DPR and heat samples.
+- The hour slider updates row state in place instead of rebuilding the list on every input.
 
 ## Build
 
 ```bash
-python3 scripts/build.py --mode full   # writes web/data.json + web/geo/*.json
-python3 scripts/validate.py            # schema, conservation, coverage checks
-python3 -m http.server -d web 3003     # preview
+python3 scripts/routes.py --from-flow   # add missing walking legs (optional)
+python3 scripts/build.py --city tampere --mode full
+python3 scripts/validate.py             # schema, conservation, coverage
+python3 -m http.server -d web 3003      # preview at http://localhost:3003
 ```
 
 ## Deploy
 
 GitHub Actions → Pages. `Pages → Source` must be **GitHub Actions**.
 
-- No map key or secret is required: the basemap is OpenStreetMap raster tiles.
-- Optional **secret** `DIGITRANSIT_API_KEY` — build-time routing (not yet used by the default build).
+The workflow syncs events daily at 05:15 UTC, does a guaranteed full rebuild on Sundays at
+04:00 UTC, retries on Sunday at 06:00 UTC, and runs on pushes. `validate.py` blocks deployment,
+so a failed build leaves the last good site up.
 
-The workflow runs a daily event sync (05:15 UTC), a weekly full rebuild (Sun 04:00 UTC),
-and on pushes. A failed validation blocks deployment; the last good site stays up.
+No map key or secret is required: the basemap is OpenStreetMap raster tiles. Optional secret
+`DIGITRANSIT_API_KEY` is available at build time for routing.
 
-## Data & honesty
+## Honesty
 
-- Music events come from [Tampere Keikat](https://github.com/zakker111/tampere-keikat) (MIT), read-only.
-- Sports rows come from the public Liiga game list, student parties from Kide's Tampere product
-  list, and stage, culture, library and community rows from the city's own event calendar. Every
-  row is a real listing from one of those feeds; `validate.py` rejects a placeholder.
-- Every event sits on a venue with a **street address**, and the panel and the row list show that
-  address beside the venue. The student source publishes no coordinates, so a product is published
-  only when its place is already a registry venue — otherwise it is dropped and logged.
-- Attendance = venue capacity × fill prior × interest score, calibrated against reported league
-  attendance once that scraper lands. Origins = population gravity over travel impedance.
-- See `AGENTS.md` for rules and `VERSIONS.md` for model/schema provenance.
+Venue points are OpenStreetMap address points where available; points that are approximate are
+flagged. Capacities nobody publishes are class priors. Music, sports, student and calendar rows
+are real published events, never placeholders.
+
+See `AGENTS.md` for the data contract and `VERSIONS.md` for release and model provenance.

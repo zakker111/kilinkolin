@@ -16,6 +16,13 @@ Hosted on GitHub Pages at `https://zakker111.github.io/kilinkolin/`.
 
 Not a fork of Tampere Keikat — it reads that project's published feed. See `NOTICE.md`.
 
+## Versions
+
+`APP_VERSION` lives in `web/config.js`. Every release also gets a top entry in `VERSIONS.md`, a
+line in `README.md` and a note in `TODO.md`; keep those in step when the site changes.
+`MODEL_VERSION` (currently 2026.11.5) lives in `scripts/build.py` and `web/config.js` and changes
+only when the model does.
+
 ## Hard rules
 
 1. **Never write to `zakker111/tampere-keikat`.** It is read-only input.
@@ -126,5 +133,7 @@ separately by four guilds is merged on (date, start, title).
 - `git diff` contains no key, no `vendor/` churn, no build output outside `web/`.
 - `TODO.md` updated; `VERSIONS.md` entry if behaviour or schema changed.
 - `AGENTS.md` updated when the layout, controls or data contract change.
+- `README.md` updated when the user-facing behaviour or data sources change; the app version in
+  `web/config.js`, `README.md` and `VERSIONS.md` must agree.
 - If the UI changed, load it locally and check that picking a day and dragging the hour repaints
   the heat over the tiles and that the estimate box agrees with the map.

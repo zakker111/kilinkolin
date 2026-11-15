@@ -33,6 +33,8 @@
 - [x] Mobile performance: browser route geometry simplified (3.25 MB -> 1.43 MB), canvas DPR capped
       at 1.75, normal HTTP caching, in-place panel updates and a compact legend
 - [x] Mobile detection: `html.is-mobile` from viewport/pointer, a 50dvh map and four map labels
+- [x] Release 0.13.0: version bump and README, NOTICE, AGENTS and TODO refreshed to the live
+      day-and-hour site
 - [x] Sports adapter: Liiga public game list, Ilves/Tappara home games at Nokia Arena
 - [x] Feed end times: the Liiga adapter passes the playing time when a game carries one, so the
       hockey egress curve uses a real end instead of the 150-minute default

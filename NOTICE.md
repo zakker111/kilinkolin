@@ -19,14 +19,21 @@ though it reuses code and interface patterns from it under the MIT licence.
 - Music event data is read at build time from the published Tampere Keikat feed
   (`https://zakker111.github.io/tampere-keikat/data.json`). Read-only; this repo never
   writes to that project.
+- Sports fixtures come from the public Liiga game list, filtered to Ilves and Tappara home
+  games in Tampere.
+- Student events come from Kide's public Tampere product list. Kide publishes no coordinates,
+  so a product is placed only on a venue already in the registry; unplaceable products are
+  dropped and logged, never guessed.
+- Stage, culture, library and community events come from Tampereen tapahtumakalenteri, using
+  the calendar's own published point and street address.
 - Population figures are approximate public statistics.
-- Venue coordinates are approximate (see `registry/venues.json`), not survey-grade.
-- Rows flagged `SAMPLE` in the UI are placeholder rows for categories whose real feeds
-  are not wired yet (sports, student, theatre, library). They are never presented as real.
+- Venue points are OpenStreetMap address points where available; approximate points are
+  flagged in `registry/venues.json`, not presented as survey-grade.
 - Street geometry comes from the FOSSGIS OSRM service over OpenStreetMap data (ODbL).
+- No SAMPLE or placeholder rows are published. `data/seed_events.json` is loaded only with
+  `--with-samples`, and `validate.py` rejects a placeholder in the live data.
 
 ## Not affiliated
 
-Google Maps, Ticketmaster, Eventz / Tampereen tapahtumakalenteri, Digitransit, Liiga,
-Korisliiga, Superpesis, TREY, Tamko and Kide are third-party services with their own terms.
-Nothing here implies endorsement by them.
+OpenStreetMap, FOSSGIS/OSRM, Tampereen tapahtumakalenteri, Liiga, Kide and Tampere Keikat are
+third-party services with their own terms. Nothing here implies endorsement by them.

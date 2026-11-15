@@ -2,6 +2,19 @@
 
 ## App
 
+### 0.13.0 — 2026-11-15
+Mobile-first release, with the documentation brought up to date.
+
+- This release promotes the 0.12.4 mobile and performance work as the current baseline: phone
+  detection, a 50dvh map, compact legend, capped canvas DPR, simplified route geometry, normal
+  HTTP caching and in-place panel updates.
+- Rewrote `README.md` around the site as it works now — day strip, hour scrubber, street heat,
+  event dots and the "What's on" panel — instead of the old event-selector description.
+- Updated `NOTICE.md`: it lists the four live feeds and no longer claims that sports, student,
+  theatre or library rows are SAMPLE placeholders.
+- Updated `AGENTS.md` with the version-bump rule and `TODO.md` with the release entry.
+- No model, schema or data change: model 2026.11.5, schema 2, 380 events at release.
+
 ### 0.12.4 — 2026-11-15
 Faster, lighter and properly laid out on a phone.
 
@@ -361,17 +374,18 @@ First working build.
 
 ## Data & model
 
-- `model_version`: **2026.11.2** — fill priors by category, gravity β = 1.6,
-  impedance from distance/speed approximation, class-based mode adjustment; the Liiga adapter
-  supplies a real end minute when the game list carries playing time.
+- `model_version`: **2026.11.5** — fill priors by category, gravity β = 1.6,
+  impedance from distance/speed approximation, class-based mode adjustment; event capacity from
+  published participant counts and Kide practice keywords, a venue-size class prior, district
+  transit corridors, and a real end minute when the source publishes one.
 - `events_schema`: **2** — row indices 0–6 frozen; 7–14 appended.
 - `flows_schema`: **1** — attendance, interest, zones, modes, corridors, arrival, egress.
-- `venues`: 1 — 69 registry venues, each with a street address and an OpenStreetMap address point,
+- `venues`: 1 — 74 registry venues, each with a street address and an OpenStreetMap address point,
   plus calendar venues generated from the city calendar's own published points (address kept,
-  capacity unknown), 12 hubs, approximate coordinates flagged per venue.
-- `zones`: 1 — 26 Tampere districts + 13 surrounding/Pirkanmaa bands.
+  capacity unknown); 131 venues in the current build, approximate coordinates flagged per venue.
+- `zones`: 1 — 40 zones: Tampere districts plus surrounding/Pirkanmaa bands and a long-distance band.
 - Calibration dataset: **none yet** (priors only) — backtest pending.
-- Upstream feeds: `tampere-keikat` @ 2026-11-14 12:05 UTC snapshot; Liiga game list
+- Upstream feeds: `tampere-keikat` feed snapshot read at build time; Liiga game list
   (`liiga.fi/api/v2/games`) filtered to Ilves/Tappara home games in Tampere; Kide public product
   list (`api.kide.app/api/products?city=Tampere`) for student events; Tampereen tapahtumakalenteri
   (`tapahtumat.tampere.fi/api/search/internal-content-fetch?lang=fi&country=FI&q=`) for stage,
