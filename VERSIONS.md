@@ -2,6 +2,18 @@
 
 ## App
 
+### 0.9.1 — 2026-11-15
+Fluid, quieter interface.
+
+- Changed: the hour slider has a filled track and a larger thumb, and the fill follows the chosen hour.
+- Changed: the zoom buttons ease into the new scale over 240 ms instead of jumping.
+- Changed: the map fades in once tiles paint, the page eases in on load, and day buttons and the
+  tooltip get short, calm transitions.
+- Changed: the selected day scrolls itself into view on the strip; the estimate line fits on one
+  line at desktop width.
+- Changed: visible focus rings, tabular numbers and a reduced-motion mode that turns animation off.
+- Fixed: the loading overlay fades out instead of disappearing between frames.
+
 ### 0.9.0 — 2026-11-15
 Dots for what is on, and a phone-first layout.
 
