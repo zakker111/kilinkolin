@@ -127,24 +127,6 @@ def wanted_from_flows(venues, zones, hubs):
                 h = hubs.get(hid)
                 if h:
                     legs[key] = ((h["lat"], h["lon"]), here, leg.get("name", key))
-        # A flow that draws straight corridors has no legs[] to copy keys from, so derive
-        # the keys it would use once cached. Without this the cache can never learn about
-        # them: build.py needs the cached route to emit a leg, and this refresh only
-        # fetched keys that already had a leg.
-        for z in flow.get("zones", []):
-            zz = zy.get(z.get("zone_id"))
-            if not zz or hav_km((zz["lat"], zz["lon"]), here) > 9.0:
-                continue
-            key = f"{v['id']}|zone:{zz['id']}"
-            legs.setdefault(key, ((zz["lat"], zz["lon"]), here, f"{v['name']} ← {zz['name']}"))
-        for hid in (v.get("hubs") or [])[:HUB_LIMIT]:
-            h = hubs.get(hid)
-            if not h:
-                continue
-            legs.setdefault(f"{v['id']}|hub:{hid}",
-                            ((h["lat"], h["lon"]), here, f"{v['name']} ← {h['name']}"))
-            legs.setdefault(f"{v['id']}|hub:{hid}:drive",
-                            ((h["lat"], h["lon"]), here, f"{v['name']} ← {h['name']} (transit)"))
     return legs
 
 
@@ -158,6 +140,16 @@ def main():
     venues_doc = load(os.path.join(ROOT, "registry", "venues.json"))
     zones_doc = load(os.path.join(ROOT, "registry", "zones.json"))
     venues, zones, hubs = venues_doc["venues"], zones_doc["zones"], venues_doc["transit_hubs"]
+
+    # Calendar events put a venue in web/geo/venues.json that the registry does not list yet
+    # (a library hall, a school auditorium). They carry their own published coordinates, so
+    # their legs can be routed like any other venue instead of falling back to straight lines.
+    generated = os.path.join(ROOT, "web", "geo", "venues.json")
+    if os.path.exists(generated):
+        known = {v["id"] for v in venues}
+        for v in load(generated).get("venues", []):
+            if v["id"] not in known and v.get("lat") and v.get("lon"):
+                venues.append(v)
 
     doc = {"schema_version": 1, "source": "FOSSGIS OSRM foot (OpenStreetMap, ODbL)"}
     if os.path.exists(CACHE) and not args.refresh:

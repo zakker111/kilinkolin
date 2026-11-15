@@ -59,22 +59,16 @@ jobs:
         run: python3 scripts/build.py --city tampere --mode full
 
       # New events bring new origins; fetch their street geometry before deploying so the
-      # heat follows roads instead of falling back to straight lines. A cache with fewer
-      # than 50 legs is treated as empty and seeded in full (first run, or a wiped cache).
+      # heat follows roads instead of falling back to straight lines.
       - name: Fetch missing street routes
         continue-on-error: true
         run: |
-          cached=0
-          if [ -s registry/routes.json ]; then
-            cached=$(python3 -c "import json;print(len(json.load(open('registry/routes.json')).get('routes',{})))" || echo 0)
-          fi
+          cached=$(python3 -c "import json,os;p='registry/routes.json';print(len(json.load(open(p)).get('routes',{})) if os.path.exists(p) else 0)")
           echo "cached legs: $cached"
-          if [ "$cached" -ge 200 ]; then
-            python3 scripts/routes.py --from-flow --max 300
-          else
-            rm -f registry/routes.json
-            python3 scripts/routes.py --max 1400
-          fi
+          # legs the current flows draw, then any missing legs for venues that are new
+          # (calendar venues arrive with their own coordinates and need their own routes)
+          python3 scripts/routes.py --from-flow --max 300
+          python3 scripts/routes.py --max 400
 
       - name: Rebuild with the new routes
         run: python3 scripts/build.py --city tampere --mode full
