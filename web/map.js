@@ -217,8 +217,8 @@
       const n = Math.max(6, Math.min(320, Math.round(len / 4)));
       // wider kernels when zoomed out, so long approaches read as heat and not as hairlines
       const zoomBoost = Math.min(2.4, Math.max(0.6, Math.pow(2, 13.2 - zoom)));
-      const radius = (3 + 6 * weight) * zoomBoost;
-      const alpha = 0.07 + 0.21 * weight;
+      const radius = (4 + 7.5 * weight) * zoomBoost;
+      const alpha = 0.10 + 0.27 * weight;
       // origin patch: where this part of the crowd comes from. Sized by people, not by
       // walk length, so a distant district still reads as a source area.
       const home = s.pts[0];
@@ -282,7 +282,7 @@
     if (!shapes.length) return;
     const half = ensureHalf(map);
     deposit(half, shapes, topDensity(shapes), map.zoom);
-    colourise(half, ctx, map, rampAt, 210, magnitude);
+    colourise(half, ctx, map, rampAt, 235, magnitude);
   }
 
   /* ------------------------------------------------------------- aggregate */
@@ -360,7 +360,7 @@
 
   /* ---------------------------------------------------------- heat layer */
   function paintFlow(ctx, map) {
-    ctx.fillStyle = "rgba(250,247,241,.42)";
+    ctx.fillStyle = "rgba(250,247,241,.34)";
     ctx.fillRect(0, 0, map.w, map.h);
 
     const agg = S.agg || { legs: new Map(), venues: new Map(), people: 0 };
@@ -373,7 +373,8 @@
       people: Math.max(1, leg.people), share: leg.people / total, mode: leg.mode, name: leg.name,
     })).filter((s) => s.pts.length > 1);
 
-    const magnitude = Math.min(1, Math.max(0.08, Math.log10(total + 1) / 3.6));
+    // a touch more presence: quiet hours stay faint, busy ones fill the streets
+    const magnitude = Math.min(1, Math.max(0.14, Math.log10(total + 1) / 3.1));
     drawTrafficHeat(ctx, map, shapes, magnitude);
 
     // the venues people are heading to, sized by how many are on their way
