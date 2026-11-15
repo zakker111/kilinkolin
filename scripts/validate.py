@@ -76,6 +76,13 @@ def main():
         a_sum = round(sum(s["share"] for s in f.get("arrival", [])), 2)
         if not 0.98 <= a_sum <= 1.02:
             errors.append(f"event {f.get('id')} arrival shares sum to {a_sum}")
+        e_sum = round(sum(s["share"] for s in f.get("egress", [])), 2)
+        if f.get("egress") and not 0.98 <= e_sum <= 1.02:
+            errors.append(f"event {f.get('id')} egress shares sum to {e_sum}")
+        if f.get("start") is None:
+            errors.append(f"event {f.get('id')} has no start minute")
+        elif f.get("end") is not None and f["end"] <= f["start"]:
+            errors.append(f"event {f.get('id')} ends before it starts ({f.get('start')}–{f.get('end')})")
         z_sum = sum(z["share"] for z in f.get("zones", []))
         if z_sum > 1.001:
             errors.append(f"event {f.get('id')} zone shares exceed 1 ({z_sum:.3f})")
@@ -100,6 +107,13 @@ def main():
 
     if not cats.get("gigs"):
         errors.append("no gigs in the feed — music ingest is probably broken")
+
+    # the live site publishes feed data only; SAMPLE placeholders must never ship
+    if (data.get("source_status") or {}).get("seed") != "OFF":
+        errors.append("seed rows are enabled — build without --with-samples for the live site")
+    sampled = [row[2] for row in events if "sample" in str(row[2]).lower()]
+    if sampled:
+        errors.append(f"{len(sampled)} published row(s) look like SAMPLE placeholders: {sampled[:3]}")
 
     coverage = data.get("coverage", {})
     total = coverage.get("total", 0)
