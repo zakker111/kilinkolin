@@ -2,6 +2,16 @@
 
 ## App
 
+### 0.13.1 — 2026-11-15
+Two UI fixes from the desktop and phone browser sweep.
+
+- Fixed: the hour scrubber's last stop is 06:00 the next morning, but it read exactly like 06:00
+  the same day. The time label now shows `06:00 +1`, the estimate card shows the next date, and an
+  event end after midnight carries `+1` too.
+- Fixed: the desktop legend repeated the category list in two rows. The compact single-row legend
+  is now phone-only; desktop keeps the fuller labelled swatches.
+- No model, schema or data change.
+
 ### 0.13.0 — 2026-11-15
 Mobile-first release, with the documentation brought up to date.
 

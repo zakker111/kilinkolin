@@ -35,6 +35,7 @@
 - [x] Mobile detection: `html.is-mobile` from viewport/pointer, a 50dvh map and four map labels
 - [x] Release 0.13.0: version bump and README, NOTICE, AGENTS and TODO refreshed to the live
       day-and-hour site
+- [x] 0.13.1 UI fixes: next-day `06:00 +1` label and one category legend row on desktop
 - [x] Sports adapter: Liiga public game list, Ilves/Tappara home games at Nokia Arena
 - [x] Feed end times: the Liiga adapter passes the playing time when a game carries one, so the
       hockey egress curve uses a real end instead of the 150-minute default

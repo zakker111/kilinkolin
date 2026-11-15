@@ -27,6 +27,7 @@ a{color:inherit;}
 h1{font-family:'Bebas Neue',sans-serif;letter-spacing:.03em;font-size:clamp(30px,4.2vw,44px);line-height:1;margin:0;color:var(--paper);}
 h1 em{font-style:normal;color:var(--teal);}
 html.is-mobile .legend-swatches{display:none;}
+html.is-mobile .legend-dots{display:flex;}
 html.is-mobile #mapCanvas{height:clamp(280px,50dvh,520px);}
 html.is-mobile .legend{left:7px;bottom:30px;padding:5px 7px;font-size:8.5px;max-width:calc(100% - 14px);}
 html.is-mobile .legend-foot{display:none;}
@@ -99,7 +100,7 @@ main{position:relative;z-index:1;max-width:1240px;margin:0 auto;padding:0 16px 2
 .modeRow{display:flex;align-items:center;gap:6px;margin-top:4px;font-size:9.5px;color:var(--paper);}
 .modeRow .dot{width:8px;height:8px;border-radius:50%;flex:none;}
 .legend-foot{margin-top:5px;font-size:8px;color:var(--paper-dim);opacity:.8;}
-.legend-dots{display:flex;gap:10px;margin-top:5px;font-size:8.5px;color:var(--paper);}
+.legend-dots{display:none;gap:10px;margin-top:5px;font-size:8.5px;color:var(--paper);}
 .legend-dots span{display:inline-flex;align-items:center;gap:4px;}
 .legend-dots i{width:7px;height:7px;border-radius:50%;border:1px solid rgba(255,255,255,.9);flex:none;}
 .eventTip{position:absolute;z-index:5;pointer-events:none;background:rgba(23,19,16,.97);color:var(--paper);

@@ -353,6 +353,13 @@
     return `${DOW[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}`;
   }
 
+  function addDays(iso, delta) {
+    const p = (iso || "").split("-");
+    if (p.length !== 3) return iso;
+    const d = new Date(+p[0], +p[1] - 1, +p[2] + delta);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+
   function clockLabel(min) {
     const m = ((Math.round(min) % 1440) + 1440) % 1440;
     return String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0");
@@ -520,7 +527,7 @@
   function renderEstimate() {
     const box = $("estimate");
     const agg = S.agg || { people: 0, events: 0 };
-    const day = dayLabel(S.day);
+    const day = dayLabel(S.minutes >= 24 * 60 ? addDays(S.day, 1) : S.day);
     const time = clockLabel(S.minutes);
     if (!agg.people) {
       box.innerHTML = `

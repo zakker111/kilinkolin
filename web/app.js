@@ -91,7 +91,10 @@
 
   function setTime(min, moveSlider) {
     if (moveSlider) $("timeSlider").value = String(min);
-    $("timeLabel").textContent = window.KMap.clockLabel(min);
+    const nextDay = +min >= 24 * 60;
+    const label = window.KMap.clockLabel(min);
+    $("timeLabel").textContent = nextDay ? label + " +1" : label;
+    $("timeLabel").title = nextDay ? label + " the next morning" : "";
     paintSlider();
   }
 
@@ -106,7 +109,7 @@
       box.innerHTML = `<span class="pd-hint">${IS_MOBILE ? "Tap a dot on the map, or a row below, for that event." : "Hover a dot on the map, or a row below, for that event."}</span>`;
       return;
     }
-    const end = ev.end != null ? "–" + window.KMap.clockLabel(ev.end) : "";
+    const end = ev.end != null ? "–" + window.KMap.clockLabel(ev.end) + (ev.end >= 24 * 60 ? " +1" : "") : "";
     box.className = "panel-detail on";
     box.innerHTML =
       `<div class="pd-title">${esc(ev.title)}</div>` +
