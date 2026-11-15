@@ -30,6 +30,9 @@
       reachable on the scrubber, and arrival windows match the chosen minute
 - [x] Event dots: gigs red, sports blue, student amber; tap a dot for title, time and venue
 - [x] Phone layout: stacked controls, larger touch targets, viewport-sized map, no sideways scroll
+- [x] Mobile performance: browser route geometry simplified (3.25 MB -> 1.43 MB), canvas DPR capped
+      at 1.75, normal HTTP caching, in-place panel updates and a compact legend
+- [x] Mobile detection: `html.is-mobile` from viewport/pointer, a 50dvh map and four map labels
 - [x] Sports adapter: Liiga public game list, Ilves/Tappara home games at Nokia Arena
 - [x] Feed end times: the Liiga adapter passes the playing time when a game carries one, so the
       hockey egress curve uses a real end instead of the 150-minute default

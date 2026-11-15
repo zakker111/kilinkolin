@@ -77,12 +77,19 @@ Indices 0–6 are frozen (older consumers read them positionally). Append only.
 `web/geo/routes.json`, a cache of real pedestrian geometry (`venue|hub:<id>` or
 `venue|zone:<id>`), fetched by `scripts/routes.py` from the FOSSGIS OSRM foot instance and
 committed under `registry/routes.json`. Never call a router at runtime and never invent geometry:
-missing cache entries fall back to the straight `corridors[]` lines.
+missing cache entries fall back to the straight `corridors[]` lines. The browser copy is simplified
+at build time (Douglas-Peucker, about 9 m, five decimals) to keep the payload small; it is not the
+routing cache, and `registry/routes.json` keeps the full OSRM geometry.
 
 Every event must resolve to a real venue: a registry venue, or a venue generated from a feed's own
 published coordinates (the city calendar supplies both the point and the address). Generated
 venues live in `web/geo/venues.json` with an `address`; they are never hand-written into the
 registry and never guessed.
+
+`map.js` sets `html.is-mobile` from `(max-width: 700px)` or a coarse pointer up to 1024px. On a
+phone it caps canvas DPR at 1.75 (2 on desktop), samples fewer heat points and draws four map
+labels; the CSS uses a 50dvh map (clamped 280-520px) and hides the duplicate legend swatches.
+Keep phone checks to a 390x844 touch viewport.
 
 Each district in `registry/zones.json` carries a `transit_mode` (`tram`, `bus` or `rail`). It
 colours the corridor that district's people arrive along: close districts walk/bike, farther ones

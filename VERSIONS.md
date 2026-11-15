@@ -2,6 +2,25 @@
 
 ## App
 
+### 0.12.4 — 2026-11-15
+Faster, lighter and properly laid out on a phone.
+
+- Mobile: `map.js` detects a narrow or coarse-pointer viewport (`html.is-mobile`), caps the canvas
+  at 1.75x DPR instead of 3x, samples fewer heat points and draws four district labels instead of
+  six. The phone map is a 50dvh canvas clamped to 280-520px instead of `100dvh - 300px`; the legend drops
+  the duplicate swatch list and sits above the attribution, so it covers about 60px of a 424px map
+  instead of roughly a third of it.
+- Performance: browser route geometry is simplified with Douglas-Peucker (~9 m) and rounded to five
+  decimals in `build.py`. `web/geo/routes.json` goes from 3.25 MB / 153,932 points to 1.43 MB /
+  61,894 points (gzip 699 KB -> 270 KB); the full geometry stays in `registry/routes.json`.
+- Fixed: the page fetched every JSON file with `cache: "no-store"`, so a repeat visit re-downloaded
+  the whole payload. It now uses normal HTTP caching (GitHub Pages sets `max-age=600`).
+- Changed: the hour slider updates the event rows' on/soon classes in place (one rAF per frame)
+  instead of rebuilding the list and reattaching listeners on every input event.
+- Changed: Google Fonts requests only the weights the stylesheet uses (400/600/700 Inter, 400/600
+  Plex Mono); `viewport-fit=cover` and safe-area padding handle notched phones.
+- Total initial JSON on the local uncompressed preview: 5.0 MB -> 3.2 MB. Pages serves it gzipped.
+
 ### 0.12.3 — 2026-11-15
 Event size and venue size now shape the heat, and districts ride their own transit.
 

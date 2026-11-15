@@ -2,6 +2,7 @@
 (() => {
   const CFG = window.KILINKOLIN || {};
   const $ = (id) => document.getElementById(id);
+  const IS_MOBILE = document.documentElement.classList.contains("is-mobile");
   const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const CAT_LABEL = {
@@ -11,6 +12,7 @@
 
   let curDay = null;
   let dayEvents = [];
+  let dayIndex = new Map();
   let selectedId = null;
   let VENUES = {};
 
@@ -101,7 +103,7 @@
     const ev = dayEvents.find((e) => e.id === id);
     if (!ev) {
       box.className = "panel-detail";
-      box.innerHTML = `<span class="pd-hint">Hover a dot on the map, or a row below, for that event.</span>`;
+      box.innerHTML = `<span class="pd-hint">${IS_MOBILE ? "Tap a dot on the map, or a row below, for that event." : "Hover a dot on the map, or a row below, for that event."}</span>`;
       return;
     }
     const end = ev.end != null ? "–" + window.KMap.clockLabel(ev.end) : "";
@@ -131,6 +133,7 @@
     const list = $("panelList");
     if (!list) return;
     dayEvents = window.KMap.dayEvents();
+    dayIndex = new Map(dayEvents.map((e) => [e.id, e]));
     $("panelTitle").textContent = curDay ? `What's on · ${dayLabel(curDay)}` : "What's on";
     $("panelCount").textContent = dayEvents.length
       ? `${dayEvents.length} event${dayEvents.length === 1 ? "" : "s"}`
@@ -158,6 +161,19 @@
       row.addEventListener("focus", () => { select(id); window.KMap.focusEvent(id); });
     });
     renderDetail(selectedId && dayEvents.some((e) => e.id === selectedId) ? selectedId : null);
+  }
+
+  /* time moves do not change any row text, only its on/soon state */
+  function updatePanelNow() {
+    const now = +$("timeSlider").value;
+    document.querySelectorAll("#panelList .panelRow[data-id]").forEach((row) => {
+      const e = dayIndex.get(row.dataset.id);
+      if (!e) return;
+      const occurring = e.start != null && e.end != null && now >= e.start && now < e.end;
+      const soon = e.start != null && !occurring && now >= e.start - 120 && now < e.start;
+      row.classList.toggle("on", occurring);
+      row.classList.toggle("soon", soon);
+    });
   }
 
   function renderStatus(meta) {
@@ -189,7 +205,7 @@
   async function load() {
     let data = { events: [], coverage: {} };
     try {
-      const r = await fetch("./data.json", { cache: "no-store" });
+      const r = await fetch("./data.json");
       if (!r.ok) throw new Error("HTTP " + r.status);
       data = await r.json();
     } catch (err) {
@@ -198,7 +214,7 @@
     renderStatus(data);
     renderFoot(data);
     try {
-      const vr = await fetch("./geo/venues.json", { cache: "no-store" });
+      const vr = await fetch("./geo/venues.json");
       if (vr.ok) (await vr.json()).venues.forEach((v) => { VENUES[v.id] = v; });
     } catch (err) {
       console.warn("venues.json unavailable", err);
@@ -221,11 +237,15 @@
     }
     renderPanel();
 
+    let queued = 0;
     $("timeSlider").addEventListener("input", (e) => {
-      const min = +e.target.value;
-      setTime(min, false);
-      window.KMap.setTime(min);
-      renderPanel();
+      setTime(+e.target.value, false);
+      if (queued) cancelAnimationFrame(queued);
+      queued = requestAnimationFrame(() => {
+        queued = 0;
+        window.KMap.setTime(+$("timeSlider").value);
+        updatePanelNow();
+      });
     });
   }
 

@@ -26,6 +26,12 @@ a{color:inherit;}
 .build-badge{font-size:9px;letter-spacing:.08em;text-transform:none;color:var(--paper-dim);opacity:.8;}
 h1{font-family:'Bebas Neue',sans-serif;letter-spacing:.03em;font-size:clamp(30px,4.2vw,44px);line-height:1;margin:0;color:var(--paper);}
 h1 em{font-style:normal;color:var(--teal);}
+html.is-mobile .legend-swatches{display:none;}
+html.is-mobile #mapCanvas{height:clamp(280px,50dvh,520px);}
+html.is-mobile .legend{left:7px;bottom:30px;padding:5px 7px;font-size:8.5px;max-width:calc(100% - 14px);}
+html.is-mobile .legend-foot{display:none;}
+html.is-mobile .attrib{font-size:8px;bottom:6px;}
+html.is-mobile .mapZoom button{width:34px;height:34px;font-size:17px;}
 .status-pill{display:inline-flex;align-items:center;gap:7px;margin-left:auto;padding:5px 12px;
   border:1px solid var(--line);border-radius:20px;background:rgba(239,232,216,.04);
   font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--paper-dim);}
@@ -183,22 +189,22 @@ footer a{color:var(--amber);text-decoration:underline;}
   .day-mon{font-size:7px;}
   .timeRow{width:100%;min-width:0;padding:8px 10px;}
   .time{height:28px;}
-  #mapCanvas{height:calc(100dvh - 300px);min-height:340px;max-height:none;}
+  #mapCanvas{height:clamp(330px,50dvh,520px);min-height:330px;max-height:none;}
   .estimate{left:7px;top:7px;max-width:calc(100% - 56px);padding:7px 9px;border-radius:8px;}
   .e-title{font-size:11.5px;}
   .e-num{font-size:24px;margin-top:3px;}
   .e-line{font-size:9px;}
   .e-note{font-size:8.5px;}
-  .legend{left:7px;bottom:7px;padding:5px 7px;font-size:8.5px;max-width:calc(100% - 14px);}
+  .legend{left:7px;bottom:30px;padding:5px 7px;font-size:8.5px;max-width:calc(100% - 14px);}
   .legend-title{font-size:8px;}
   .legend-ends{font-size:7.5px;gap:8px;}
   .legend-foot{display:none;}
   .legend-dots{font-size:7.5px;margin-top:4px;}
-  .legend-swatches{font-size:7.5px;gap:3px 7px;}
+  .legend-swatches{display:none;}
   .mapZoom{top:7px;right:7px;gap:5px;}
   .mapZoom button{width:34px;height:34px;font-size:17px;}
-  .attrib{font-size:8px;}
-  footer{padding:8px 10px 30px;font-size:10px;}
+  .attrib{font-size:8px;bottom:6px;}
+  footer{padding:8px 10px calc(30px + env(safe-area-inset-bottom));font-size:10px;}
   .eventTip b{font-size:11px;}
   .eventPanel{max-height:46vh;padding:8px 10px;}
   .panel-title{font-size:18px;}

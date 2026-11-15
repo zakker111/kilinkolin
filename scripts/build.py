@@ -845,11 +845,14 @@ def build(mode="full", with_samples=False):
         for leg in f.get("legs", []):
             if leg["key"] in ROUTES:
                 used_routes[leg["key"]] = ROUTES[leg["key"]]
+    web_routes = {}
+    for key, rec in used_routes.items():
+        web_routes[key] = {**rec, "geometry": simplify_geometry(rec.get("geometry") or [])}
     write(os.path.join(GEO, "routes.json"), {
         "schema_version": 1,
         "source": routes_doc.get("source", "OSRM foot"),
         "generated": data_doc["generated"],
-        "routes": used_routes,
+        "routes": web_routes,
     })
 
     write(os.path.join(GEO, "coverage.json"), {
@@ -860,6 +863,42 @@ def build(mode="full", with_samples=False):
     log(f"[build] {len(rows)} events | " + ", ".join(f"{k}:{v}" for k, v in sorted(by_cat.items())))
     log(f"[build] areas: " + ", ".join(f"{k}:{v}" for k, v in sorted(by_area.items())))
     return len(rows)
+
+
+def simplify_geometry(points, eps=0.00008):
+    """Drop points that sit within about 9 m of the line between their neighbours.
+
+    The heat is a diffuse density field, so sub-kernel deviations are invisible. Endpoints are
+    always kept and coordinates are rounded to five decimals (~1 m). ``registry/routes.json``
+    keeps the full OSRM geometry; only the browser copy is simplified.
+    """
+    if len(points) <= 2:
+        return [[round(p[0], 5), round(p[1], 5)] for p in points]
+    lat0 = sum(p[0] for p in points) / len(points)
+    k = math.cos(math.radians(lat0))
+    xy = [(p[1] * k, p[0]) for p in points]
+    keep = [False] * len(points)
+    keep[0] = keep[-1] = True
+    stack = [(0, len(points) - 1)]
+    while stack:
+        i, j = stack.pop()
+        if j <= i + 1:
+            continue
+        x1, y1 = xy[i]
+        x2, y2 = xy[j]
+        dx, dy = x2 - x1, y2 - y1
+        den = math.hypot(dx, dy)
+        best, idx = -1.0, None
+        for m in range(i + 1, j):
+            x, y = xy[m]
+            dist = math.hypot(x - x1, y - y1) if den == 0 else abs(dy * x - dx * y + x2 * y1 - y2 * x1) / den
+            if dist > best:
+                best, idx = dist, m
+        if best > eps:
+            keep[idx] = True
+            stack.append((i, idx))
+            stack.append((idx, j))
+    return [[round(p[0], 5), round(p[1], 5)] for p, ok in zip(points, keep) if ok]
 
 
 def write(path, doc):

@@ -6,6 +6,9 @@
   /* least likely -> most likely: yellow, amber, orange, red, deep red */
   const HEAT = ["#f4c20d", "#ee9f18", "#e66f1a", "#d13319", "#960d0a"]; // legend swatches only
   const TILE = 256;
+  const MOBILE = window.matchMedia("(max-width: 700px), (pointer: coarse) and (max-width: 1024px), (max-width: 1000px) and (max-height: 520px)").matches;
+  document.documentElement.classList.toggle("is-mobile", MOBILE);
+  document.documentElement.dataset.mobile = MOBILE ? "true" : "false";
 
   const S = { events: [], flows: {}, venues: {}, zoneMeta: null, routes: {}, map: null, dotHits: [],
               hoverId: null, onHover: null, day: null, minutes: 19 * 60 };
@@ -28,7 +31,7 @@
       this.resize();
     }
     resize() {
-      const dpr = window.devicePixelRatio || 1;
+      const dpr = Math.min(window.devicePixelRatio || 1, MOBILE ? 1.75 : 2);
       const w = this.canvas.clientWidth || 800;
       const h = this.canvas.clientHeight || 520;
       this.w = w; this.h = h; this.dpr = dpr;
@@ -268,7 +271,7 @@
       const len = lengthOf(s.pts);
       // sqrt-ish: a long approach with few people still needs to be seen
       const weight = Math.pow(Math.min(1, density[i] / top), 0.6);
-      const n = Math.max(6, Math.min(320, Math.round(len / 4)));
+      const n = Math.max(6, Math.min(MOBILE ? 140 : 320, Math.round(len / 4)));
       // wider kernels when zoomed out, so long approaches read as heat and not as hairlines
       const zoomBoost = Math.min(2.4, Math.max(0.6, Math.pow(2, 13.2 - zoom)));
       const radius = (4 + 7.5 * weight) * zoomBoost;
@@ -445,7 +448,7 @@
 
     // district names only: the map answers where, not which gig
     const placed = [];
-    shapes.sort((a, b) => b.share - a.share).slice(0, 6).forEach((s) => {
+    shapes.sort((a, b) => b.share - a.share).slice(0, MOBILE ? 4 : 6).forEach((s) => {
       const p = s.pts[0];
       const text = s.name;
       ctx.font = "600 10px 'IBM Plex Mono', monospace";
@@ -566,10 +569,10 @@
     wire();
     try {
       const [flows, venues, zones, routes] = await Promise.all([
-        fetch("./geo/flows.json", { cache: "no-store" }).then((r) => r.json()),
-        fetch("./geo/venues.json", { cache: "no-store" }).then((r) => r.json()),
-        fetch("./geo/zones.json", { cache: "no-store" }).then((r) => r.json()),
-        fetch("./geo/routes.json", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ routes: {} }))
+        fetch("./geo/flows.json").then((r) => r.json()),
+        fetch("./geo/venues.json").then((r) => r.json()),
+        fetch("./geo/zones.json").then((r) => r.json()),
+        fetch("./geo/routes.json").then((r) => r.json()).catch(() => ({ routes: {} }))
       ]);
       S.routes = routes.routes || {};
       (flows.events || []).forEach((f) => { S.flows[f.id] = f; });
