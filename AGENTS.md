@@ -84,6 +84,24 @@ published coordinates (the city calendar supplies both the point and the address
 venues live in `web/geo/venues.json` with an `address`; they are never hand-written into the
 registry and never guessed.
 
+### Addresses
+
+A registry venue must carry a **street address** (`"address": "Takojankatu 1 C"`), not a district
+name, and its point must sit on that address — use the OpenStreetMap address point and set
+`"approx": false`. `"Keskusta"` in the address field is a bug: it moves the dot kilometres away
+and hides the real address from every visitor. The panel and the row list render
+`venue · address` from `web/geo/venues.json`, so a wrong or vague address is visible on the site.
+Capacity for a venue nobody publishes a hall size for stays a class prior; say so in `VERSIONS.md`
+rather than presenting it as published.
+
+### Student parties
+
+`scripts/feeds/kide.py` is the student source and it publishes **no coordinates at all** — only a
+free-text place string. A product is placed only when that string matches a registry venue (name or
+`aliases`, whitespace-normalised, with the spellings Kide actually uses added as aliases); every
+other product is dropped and logged rather than pinned to a guessed point. The same event sold
+separately by four guilds is merged on (date, start, title).
+
 ## Adding a feed adapter
 
 1. Write `scripts/feeds/<source>.py` exposing `fetch() -> list[dict]`.
