@@ -24,6 +24,8 @@ Venue addresses and points corrected across the registry.
 - Changed: removed 765 stale cached legs for the corrected venues and refetched the event-used legs
   the current events actually use (about 13,600 km of cached walking geometry). No route now starts at an old
   venue point.
+- Fixed: 14 venues corrected in earlier releases still had route-cache entries ending at
+  their old points; 257 event-used legs are refreshed as well.
 - No model or schema change: model 2026.11.5, schema 2, 380 events.
 
 ### 0.13.1 — 2026-11-15

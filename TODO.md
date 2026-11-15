@@ -39,7 +39,7 @@
 - [x] 0.13.1 UI fixes: next-day `06:00 +1` label and one category legend row on desktop
 - [x] 0.13.2 address corrections: 28 venues moved to published street addresses and address
       points, plus the generic fallback; 765 stale route legs dropped, the event-used legs in use
-      refetched, and the panel's venue-address line restored
+      refetched, and the panel's venue-address line restored; 257 older stale legs refreshed
 - [x] Sports adapter: Liiga public game list, Ilves/Tappara home games at Nokia Arena
 - [x] Feed end times: the Liiga adapter passes the playing time when a game carries one, so the
       hockey egress curve uses a real end instead of the 150-minute default
