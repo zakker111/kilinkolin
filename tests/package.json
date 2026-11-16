@@ -1,0 +1,10 @@
+{
+  "name": "kilinkolin-smoke",
+  "private": true,
+  "scripts": {
+    "test": "python3 -m unittest test_model && playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.65.1"
+  }
+}

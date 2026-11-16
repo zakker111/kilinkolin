@@ -2,6 +2,189 @@
 
 ## App
 
+### 0.16.1 — 2026-11-16
+Simplify the heat cache and remove the visual artifacts from the performance pass.
+
+- Changed: removed the 140 ms slider preview and its separate quick/full cache key. The slider
+  now draws the single full-quality heat directly.
+- Changed: one cache entry now owns both the heat bitmap and the projected route shapes. A hover
+  or tile repaint reuses both; a time, day or viewport change rebuilds both. Removed the per-view
+  route-geometry map, pan translation branch, `heatInfo`, quick flags and temporary sample arrays.
+- Fixed: restored overlapping heat stamps and widened the kernel so zoomed routes no longer show
+  a string of beads. Removed the pan shortcut that left a newly exposed map edge unheated until
+  the pointer was released.
+- Verified: 17 Python and 14 Playwright tests pass; `validate.py` reports 0 errors and the one
+  known straight-line corridor warning. Desktop 1280×1000 full redraw is 59 ms one-frame and
+  phone 390×844 is 29 ms; heat was visually checked at overview, zoom and pan at both sizes.
+
+### 0.16.0 — 2026-11-16
+Stop distinct events at one venue and start from each claiming the whole building.
+
+- Added: a venue/date/start collision guard. Flows are grouped by exact venue, date and published
+  start; the group's combined mid is capped at the smallest applicable venue capacity (the smaller
+  configuration when a building hosts mixed sport/gig events). Above the cap, the cap is
+  allocated in proportion to the independent mids and the integer remainder goes to the largest
+  fractional shares, so the combined figure is exactly at or below capacity. The attendance band,
+  legs, corridors and map dots scale together. TBA flows are excluded because they have no single
+  published start.
+- Added: every group member carries `basis.venue_collision{group_size,venue_capacity,
+  combined_mid_before,combined_mid_after,factor,room_split}` and
+  `data.json.calibration.venue_collisions` records the group/event/capped/unresolved counts. Every
+  shared group is `room_split: "UNRESOLVED"`: the sources publish no room allocation, and a
+  per-event `maxParticipants` cap does not say which room a listing uses.
+- Added: the **Why this number?** panel shows a **Venue split** row for every shared group, even
+  when the combined estimate already fits, naming the group size, the building cap and the
+  unresolved split. The footer explains the shared-building rule.
+- Added: 2 venue-collision model tests for proportional capping and unchanged below-cap groups
+  (17 Python total) and a browser panel/data test (14 Playwright total). The validator now
+  recomputes every group's combined mid and fails above capacity or on count/metadata drift.
+- Model 2026.11.11, schema 3. Verified: 567 events, 154 venues, 22 TBA flows, 49 published city
+  caps, 305 discounted events (median factor 0.992 over all events, range 0.439–0.998), 6 shared
+  venue/start groups covering 14 events (0 currently above capacity, 6 unresolved room splits),
+  0 validator errors and one known straight-line corridor warning; Liiga calibration remains
+  FITTED (20 games, fill 0.425, leave-one-out MAPE 20.9%).
+
+### 0.15.1 — 2026-11-16
+Spread TBA heat over a documented window instead of pinning it to 19:00.
+
+- Changed: events with no published start now carry `start_options` (18:00, 19:00, 20:00) and
+  `start_window` (`18:00–20:00`). The map averages the arrival and egress curves over those
+  candidate starts, so the heat is an uncertainty band rather than a single 19:00 peak. The
+  published time stays empty and the row/panel still say **TBA**; TBA rows are no longer marked
+  "occurring now" against a precise start.
+- Added: `data.json.calibration.tba_start` records the `PRIOR` window, the three assumed starts,
+  the method and the TBA flow count. `start` (19:00) remains only an internal representative for
+  sorting and competition overlap; it is not presented as a published start.
+- Added: the TBA heat window to the panel note, map tooltip and footer. The map tooltip now says
+  `TBA · 18:00–20:00` instead of `TBA · 19:00`.
+- Tests: extended the missing-start model test for the 18:00/19:00/20:00 options (15 Python
+  total) and added a browser test that checks a TBA flow contributes heat at 18:00, 19:00 and
+  20:00 and less than its full demand at the 19:00 representative (13 Playwright total).
+- Model 2026.11.10, schema 3. Verified: 566 events, 154 venues, 22 TBA flows, 49 published city
+  caps, 303 discounted events (median factor 0.993, range 0.437–1.0), 0 validator errors and one
+  known straight-line corridor warning; Liiga calibration remains FITTED (20 games, fill 0.425,
+  leave-one-out MAPE 20.9%).
+
+### 0.15.0 — 2026-11-16
+Stop concurrent events from each counting the same shared catchment.
+
+- Added: a competition factor for simultaneous events. Same-day peers compete only when their
+  active windows overlap and at least 50% of their published top-zone arrival shares overlap.
+  The shared slice is counted once as a demand pool sized by the largest exposed event; each
+  event keeps its unique slice and receives a pool share proportional to its exposure. A 5%
+  floor applies. This is an explicit prior, not a fitted or measured substitution model.
+- Changed: the factor scales the attendance band, street legs, corridors, `data.json` attendance
+  and `ev_geo.attendance` together, so the panel and the heat agree. Each flow publishes
+  `basis.competition{factor,peers}`; `data.json.calibration.competition` records `status: PRIOR`,
+  the method, floor, minimum overlap and discounted-flow count.
+- Added: the event panel shows a **Competition** row only when the factor is below 0.999, with
+  “shared demand, not a measured split”; the footer says concurrent events share one pool.
+- Added: 6 competition model tests (15 Python total) and a browser panel test (12 Playwright
+  total). They cover equal events, disjoint catchments, sequential windows, weak overlaps,
+  unique-slice retention and a large peer not erasing a small event.
+- Fixed: music rows whose venue is only a district (`Nekala`) are dropped and logged instead of
+  being published at the unlocatable `tampere_muu` fallback; the validator correctly rejected
+  those rows. The live music snapshot also shrank from 97 to 61 rows, so the current event count
+  is lower than 0.14.1 — feed churn, not silent truncation.
+- Model 2026.11.9, schema 3. Verified: 565 events, 154 venues, 22 TBA starts, 49 published city
+  caps, 302 discounted events (median factor 0.993, range 0.437–1.0), 0 validator errors and one
+  known straight-line corridor warning; Liiga calibration remains FITTED (20 games, fill 0.425,
+  leave-one-out MAPE 20.9%).
+
+### 0.14.1 — 2026-11-16
+Collapse duplicate listings and stop showing assumed starts as published times.
+
+- Fixed: duplicate listings at the same venue, date, normalized title and start are merged.
+  Distinct showtimes are preserved, and a row with no start is never merged with a timed run.
+  The current build merged one duplicate (“Us” at Telakka) and kept both Molli performances.
+- Changed: 44 events without a published start are now labelled **Start TBA** in the panel and
+  `TBA` in the row list. Their heat is still modelled at 19:00, and the panel/footer say so.
+  The map tooltip shows `TBA · 19:00` rather than presenting 19:00 as published.
+- Added: the validator rejects two rows with the same venue/date/title/start.
+- Added: 9 Python model tests for calibration states, published-cap edge cases, dedupe and
+  missing-time handling; 11 Playwright tests cover TBA labels, cap invariants, duplicate-free
+  data and the FITTED/PRIOR/INSUFFICIENT/UNAVAILABLE panel copy.
+- Changed: the fitted hockey factor replaces the prior only when its leave-one-out MAPE is lower
+  than the prior's. This keeps the choice out of sample and makes the PRIOR state reachable.
+- Model 2026.11.8, schema 3. Verified: 597 events, 155 venues, 0 validator errors; one newly
+  added Kide venue still uses the documented corridor fallback until its street route is fetched.
+
+### 0.14.0 — 2026-11-16
+Fit the hockey estimate to reported Liiga attendance and show the working.
+
+- Added: `scripts/calibration.py` fits one hockey fill factor by mean absolute percentage error
+  against the `spectators` published for completed Liiga games. The production factor is fitted
+  on all 20 completed Ilves/Tappara home games in the current sample (22 Sep–15 Nov 2026).
+- Changed: hockey fill 0.85 → 0.425. The prior was overestimating by 91 % MAPE; the fitted
+  in-sample error is 16.7 %, and the published leave-one-out error is 20.9 % MAPE / 19.4 %
+  median APE, bias −7.6 %, with 55 % of games inside ±20 %.
+- Fixed: hockey capacity uses Nokia Arena's sport capacity (13,455), not its larger concert
+  capacity (15,000). The previous maximum-of-both rule inflated every Liiga estimate.
+- Added: city calendar `maxParticipants` remains a published cap, not observed attendance. The
+  build reports 49 events with a published cap, caps each estimate at that figure or the venue's
+  own capacity, and never uses the cap as a backtest target.
+- Added: every flow carries `basis{capacity, capacity_source, fill, fill_source, interest,
+  spread, published_max_participants}`; `data.json` carries the `calibration` block.
+- Added: the event panel's **Why this number?** disclosure shows capacity provenance, fill
+  provenance, interest signals, attendance band, Liiga backtest error and city-cap coverage.
+- Model 2026.11.7, schema 3 (event positions 0–6 unchanged).
+- Verified: 596 events, 155 venues, 0 validator errors; 5 Playwright smoke tests pass,
+  including the Liiga hockey fitted-fill/backtest panel. One newly added Kide venue still uses
+  the documented straight-line corridor fallback until its street route is fetched.
+
+### 0.13.6 — 2026-11-16
+Run the scheduled refresh once a week.
+
+- Changed: the scheduled build now runs only on Sundays at 04:00 UTC. The daily 05:15 UTC sync
+  and the Sunday 06:00 UTC retry were removed, so a successful week no longer rebuilds twice.
+- Kept: pushes that change the build and manual `workflow_dispatch` runs still rebuild and deploy.
+- No data, model or schema change: model 2026.11.6, schema 2.
+
+### 0.13.5 — 2026-11-16
+Fix malformed source times, repeated showings, and overlong student events.
+
+- Fixed: the music feed writes the event's day and month into the time field when a start is
+  missing (`2026-12-05` -> `05:12`, `2026-11-21` -> `21:11`). The build now treats those 16
+  values as missing starts, so they use the documented 19:00 fallback and stay on their
+  published date instead of moving to the previous night.
+- Fixed: city-calendar dedupe keyed only on date and title, dropping five legitimate repeat
+  performances (for example a 13:00 and an 18:00 show). The key now includes the start time.
+- Fixed: Kide multi-day bookings produced egress windows of 24–107 hours. An end more than 24
+  hours after the start is no longer trusted; the event keeps its start and uses the model's
+  typical duration.
+- Fixed: venue matching preferred a short generic alias (`Tampere`) and a shared street address
+  over the venue named in the address. `Lush pikkujoulut Koskikeskuksessa` no longer appears at
+  Ilves Bar & Night.
+- Fixed: after-midnight starts in the panel and map tooltip now show `+1` (and a 24-hour
+  event's end `+2`), matching the hour slider.
+- Added validation for malformed times, date-as-time values, start/time consistency, an empty
+  route cache, and events longer than 24 hours. The 06:00 boundary is no longer warned as a
+  suspicious time.
+- Verified: 595 events, 154 venues, 4,031 cached legs (19,763 km), 0 corridor fallbacks, 0
+  missing route keys, 0 validator errors/warnings; 3 Playwright smoke tests pass.
+- Model 2026.11.6: after-midnight starts are no longer scored as daytime events; schema 2.
+
+### 0.13.4 — 2026-11-15
+Publish every future event, not just the first page of a sorted feed.
+
+- Fixed: the city calendar adapter cut its sorted list at 220 rows and the Kide adapter at 80.
+  Because each run sorted the same source and kept the first rows, the missing tail could never be
+  picked up by a later daily refresh. The caps are gone; all future single-day rows are evaluated.
+  This adds 181 calendar events and publishes 576 events across 158 venues (232 community,
+  115 culture, 51 stage, 71 gigs, 45 sports, 62 student).
+- Fixed: after-midnight starts were drawn on the following day. The day strip runs 06:00–06:00,
+  so a source date with a start before 06:00 now moves back one date before filtering and
+  publishing (`night_date()`). This puts PISTOT Bileristeily at 00:00 on the 9 Dec night strip,
+  not at 00:00 on 10 Dec.
+- Added: the validator now refuses a deployment when any live source reports `FAILED`, when a
+  published event's venue has no address, or when a flow has no matching event/venue. Partial
+  feed failures leave the last good site live instead of silently deleting a whole category.
+- Verified: 576 events, 158 venues, 2,714 used walking legs, 0 corridor-only flows, 0 missing
+  route keys; `validate.py` exits 0 with the two known 05:12 music warnings. The route cache has
+  3,829 legs (18,772 km); the new calendar venues' 434 missing legs were fetched before the
+  final rebuild.
+- No model or schema change: model 2026.11.5, schema 2.
+
 ### 0.13.3 — 2026-11-15
 Student events completed from Kide's published product locations.
 
@@ -424,17 +607,29 @@ First working build.
 
 ## Data & model
 
-- `model_version`: **2026.11.5** — fill priors by category, gravity β = 1.6,
-  impedance from distance/speed approximation, class-based mode adjustment; event capacity from
-  published participant counts and Kide practice keywords, a venue-size class prior, district
-  transit corridors, and a real end minute when the source publishes one.
-- `events_schema`: **2** — row indices 0–6 frozen; 7–14 appended.
-- `flows_schema`: **1** — attendance, interest, zones, modes, corridors, arrival, egress.
+- `model_version`: **2026.11.11** — Liiga-fitted hockey fill, other categories use priors;
+  gravity β = 1.6, impedance from distance/speed approximation, class-based mode adjustment;
+  event capacity from published participant counts and Kide practice keywords, a venue-size
+  class prior, district transit corridors, and a real end minute when the source publishes one.
+  A competition prior pools a shared top-zone catchment once for same-day events whose active
+  windows overlap by at least 50% of their smaller catchment share. Unknown starts are averaged
+  over 18:00, 19:00 and 20:00 instead of a single 19:00 peak. A venue/date/published-start
+  collision cap shares one building capacity across distinct listings and flags the room split
+  as unresolved.
+- `events_schema`: **3** — row indices 0–6 frozen; 7–14 appended; calibration, competition,
+  venue collisions, TBA start metadata and basis added.
+- `flows_schema`: **2** — attendance/spread, interest, basis (including competition and venue
+  collision), `start_known`, `start_options`/`start_window` for TBA flows, zones, modes,
+  corridors, arrival, egress.
 - `venues`: 1 — 74 registry venues, each with a street address and an OpenStreetMap address point,
   plus calendar venues generated from the city calendar's own published points (address kept,
-  capacity unknown); 131 venues in the current build, approximate coordinates flagged per venue.
+  capacity unknown); 154 venues in the current build, approximate coordinates flagged per venue.
 - `zones`: 1 — 40 zones: Tampere districts plus surrounding/Pirkanmaa bands and a long-distance band.
-- Calibration dataset: **none yet** (priors only) — backtest pending.
+- Calibration dataset: **Liiga reported spectators** — 20 completed Ilves/Tappara home games
+  (22 Sep–15 Nov 2026), hockey fill 0.425, leave-one-out median APE 19.4 %, MAPE 20.9 %, bias
+  −7.6 %, 55 % within ±20 %. The fit replaces the prior only when its leave-one-out MAPE is
+  lower than the prior's. City `maxParticipants` is a published cap, not attendance; it is
+  coverage, not a backtest target.
 - Upstream feeds: `tampere-keikat` feed snapshot read at build time; Liiga game list
   (`liiga.fi/api/v2/games`) filtered to Ilves/Tappara home games in Tampere; Kide public product
   list (`api.kide.app/api/products?city=Tampere`) for student events; Tampereen tapahtumakalenteri

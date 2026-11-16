@@ -20,7 +20,8 @@ though it reuses code and interface patterns from it under the MIT licence.
   (`https://zakker111.github.io/tampere-keikat/data.json`). Read-only; this repo never
   writes to that project.
 - Sports fixtures come from the public Liiga game list, filtered to Ilves and Tappara home
-  games in Tampere.
+  games in Tampere. The `spectators` reported for completed games is used only to fit and
+  backtest the hockey fill; no other category is presented as calibrated.
 - Student events come from Kide's public Tampere product list. Its list endpoint has no coordinates;
   unresolved products use the street address and point published on the product detail. Entries
   with only a vague place or a postal box are dropped and logged, never guessed.

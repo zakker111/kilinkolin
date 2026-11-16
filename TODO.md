@@ -24,7 +24,7 @@
       (done manually for 0.13.2)
 - [ ] Mode split is a distance heuristic — Nokia Arena gets 24 % car despite the adjacent station;
       calibrate against real HSL/Digitransit trip data before trusting the shares
-- [x] Validation gate + GitHub Actions workflow (daily sync, weekly rebuild, Pages deploy)
+- [x] Validation gate + GitHub Actions workflow (weekly sync and rebuild, Pages deploy)
 - [x] Scheduled refresh fetches route geometry for new origins before deploying, so weekly
       updates keep the street heat instead of straight lines
 - [x] Every event contributes: no-time rows count at 19:00, daytime and after-midnight events are
@@ -43,6 +43,20 @@
 - [x] 0.13.3 student events: Kide product details now supply the published address and point when
       the list's free-text place does not match; 15 more student events (47 → 62), six new
       locations and their walking legs; 257 older stale legs refreshed
+- [x] Browser smoke test: Playwright checks day switching, both 06:00 slider extremes and a real
+      map-dot tap; the build workflow runs it before deploy
+- [x] 0.13.4 completeness: removed the silent city (220) and Kide (80) row caps; all 402 eligible
+      calendar rows are evaluated and 398 are published (4 duplicate a source), taking the site to
+      576 events / 158 venues; the new venues' 434 walking legs were fetched, leaving 0 corridor
+      fallbacks. The validator now fails on a `FAILED` source, an event venue without an address,
+      or a flow without a matching event/venue.
+- [x] 0.13.4 after-midnight dates: a start before 06:00 now belongs to the previous 06:00–06:00
+      day strip, so midnight events are no longer drawn one day late.
+- [x] 0.13.5 audit fixes: date-leaked music times (`05:12`) become missing starts; repeat city
+      performances keep their separate times; Kide multi-day ends no longer create 24–107 hour
+      egress windows; shared-address venue matching no longer puts Lush Koskikeskus at Ilves Bar
+      & Night; after-midnight labels show `+1`/`+2`; validator covers malformed times, empty
+      route caches and over-24-hour events.
 - [x] Sports adapter: Liiga public game list, Ilves/Tappara home games at Nokia Arena
 - [x] Feed end times: the Liiga adapter passes the playing time when a game carries one, so the
       hockey egress curve uses a real end instead of the 150-minute default
@@ -61,11 +75,57 @@
 - [x] Every published event resolves to a venue with a real address: a street address found in a
       row now outranks the generic fallback, and Finlaysonin kirkko (Puuvillatehtaankatu 2) is
       registered with its OSM coordinates and the parish's published capacity
-- [x] Sunday retry cron (`0 6 * * 0`) after the weekly 04:00 rebuild
+- [x] 0.13.6 weekly-only refresh: one Sunday 04:00 UTC scheduled run; the daily 05:15 UTC sync
+      and Sunday 06:00 UTC retry were removed
+- [x] 0.14.0 calibration: fit the hockey fill to 20 completed Liiga games with reported
+      spectators (0.85 → 0.425), publish a leave-one-out backtest (median APE 19.4 %, bias
+      −7.6 %, 55 % within ±20 %), and keep city `maxParticipants` as a published cap rather
+      than pretending it is measured attendance
+- [x] 0.14.1 duplicate listings: exact same venue/date/title/start is merged, distinct
+      showtimes are kept, and a missing start is never merged with a timed run; the validator
+      rejects duplicate rows
+- [x] 0.14.1 TBA starts: events with no published time are labelled Start TBA / TBA while the
+      heat was modelled at 19:00; 0.15.1 replaces that single peak with the documented window
+- [x] 0.14.1 regression tests: calibration states, cap edge cases, dedupe and missing-time
+      handling in Python, plus TBA/cap/state checks in the browser suite
+- [x] 0.15.0 competition factor: same-day events whose active windows overlap and whose
+      top-zone catchments overlap by at least 50% now share one demand pool instead of each
+      counting the same people; unique catchment slices stay, and a 5% floor applies. The
+      factor scales attendance, legs, corridors and map dots together.
+- [x] 0.15.0 competition explainability: every flow carries `basis.competition{factor,peers}`,
+      the calibration block records the PRIOR method/floor/minimum overlap, and the panel shows
+      a **Competition** row only when the factor is below 0.999.
+- [x] 0.15.0 competition regression coverage: 6 model tests for equal/disjoint/sequential/weak
+      overlaps and pool allocation, plus a browser test that opens a discounted event's working
+- [x] 0.15.0 venue honesty: music rows with only a district name are dropped and logged instead
+      of publishing at the unlocatable `tampere_muu` fallback
+- [x] 0.15.1 TBA heat window: events without a published start keep TBA labels but average
+      their arrival and egress curves over 18:00, 19:00 and 20:00 instead of a single 19:00 peak;
+      flows carry `start_options` and `start_window`, and the UI names the window
+- [x] 0.15.1 TBA regression: model test checks the documented start options, browser test checks
+      heat is present across the window and below full demand at the 19:00 representative
+- [x] 0.16.0 venue collision guard: distinct events at one venue/date/published start are
+      grouped, their combined mid is capped at the smallest applicable venue capacity, and the
+      cap is allocated in proportion to independent demand; TBA rows are excluded because they
+      have no single published start
+- [x] 0.16.0 room-split honesty: every shared group carries `basis.venue_collision` with
+      `room_split: UNRESOLVED`; per-event `maxParticipants` is not treated as a room allocation,
+      and the panel shows a **Venue split** row even when the group already fits
+- [x] 0.16.0 collision regression: proportional-cap and below-cap model tests, a browser test for
+      the capped group and panel row, plus validator recomputation of every group's combined mid
+- [x] 0.16.1 heat renderer simplification: one full-quality path replaced the slider preview and
+      its split cache; the heat bitmap and projected shapes share one key; removed the per-view
+      route map and pan translation branch; restored overlapping stamps so zoomed heat is smooth
+- [x] 0.14.0 explainability: every flow carries its capacity and fill provenance, and the
+      event panel has a "Why this number?" disclosure with the attendance band, interest
+      signals, Liiga backtest and city-cap coverage
+- [x] Hockey capacity now uses the venue's sport capacity (Nokia Arena 13,455) rather than its
+      larger concert capacity, which had inflated every Liiga estimate
 - [x] A total feed failure keeps the last good data: the build refuses to write an empty
       map and exits non-zero, so the workflow stops before committing or deploying
 - [x] City calendar adapter: `scripts/feeds/city_events.py` publishes stage, culture, library
-      and community events (217 today) with the calendar's own coordinates and addresses
+      and community events (398 today) with the calendar's own coordinates and addresses; no row
+      cap hides the later months
 - [x] Calendar locations outside the registry become real generated venues (published point,
       address, nearest district and hub) instead of falling back to `tampere_muu`
 - [x] Far venues (Kangasala, Nokia, Hämeenkyrö) fall back to their nearest districts, so they
@@ -108,7 +168,8 @@
 - [ ] Retire `data/seed_events.json` entirely once a student and a culture/venue adapter exist
 
 ### Model
-- [ ] `calibration.py` — scrape reported league attendance, fit fill factors, publish backtest error
+- [x] `calibration.py` — read Liiga reported spectators, fit the hockey fill, publish a
+      leave-one-out backtest error; city `maxParticipants` is cap coverage, not a target
 - [ ] Competition factor (two big events same evening split the same catchment)
 - [ ] Parking / tram capacity ceilings on car and transit shares
 - [ ] Student-night egress: model last-service cutoff instead of a flat tail

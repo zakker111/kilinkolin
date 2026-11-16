@@ -3,9 +3,9 @@ window.KILINKOLIN = {
   APP_NAME: "Kilinkolin",
   TAGLINE: "Estimated crowd flow for events in Tampere.",
   CITY: "tampere",
-  APP_VERSION: "0.13.3",
-  MODEL_VERSION: "2026.11.5",
-  SCHEMA_VERSION: 2,
+  APP_VERSION: "0.16.1",
+  MODEL_VERSION: "2026.11.11",
+  SCHEMA_VERSION: 3,
 
   /* Raster basemap. Any XYZ tile template works; no API key needed.
      To switch provider, change these two lines (e.g. a CARTO light basemap). */

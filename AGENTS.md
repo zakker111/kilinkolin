@@ -9,9 +9,9 @@ hour; the map aggregates every event that day into the streets people are estima
 that moment, plus the number on the move. A right-hand panel names what is on that day and shows
 the event under the pointer; hovering a dot on the map names the same event there.
 Python builds the data in GitHub Actions; the browser only fetches JSON, tiles and renders.
-The workflow refreshes every day at 05:15 UTC and does a guaranteed full rebuild on Sundays at
-04:00 UTC: new events are fetched, their missing street routes are added, the model is rebuilt,
-validated and deployed to Pages.
+The workflow refreshes once a week, on Sundays at 04:00 UTC: new events are fetched, their
+missing street routes are added, the model is rebuilt, validated and deployed to Pages. It also
+runs on pushes that change the build.
 Hosted on GitHub Pages at `https://zakker111.github.io/kilinkolin/`.
 
 Not a fork of Tampere Keikat — it reads that project's published feed. See `NOTICE.md`.
@@ -20,8 +20,8 @@ Not a fork of Tampere Keikat — it reads that project's published feed. See `NO
 
 `APP_VERSION` lives in `web/config.js`. Every release also gets a top entry in `VERSIONS.md`, a
 line in `README.md` and a note in `TODO.md`; keep those in step when the site changes.
-`MODEL_VERSION` (currently 2026.11.5) lives in `scripts/build.py` and `web/config.js` and changes
-only when the model does.
+`MODEL_VERSION` (currently 2026.11.11) lives in `scripts/build.py` and `web/config.js` and changes
+only when the model does. `SCHEMA_VERSION` is 3; event positions 0–6 are still frozen.
 
 ## Hard rules
 
@@ -33,8 +33,10 @@ only when the model does.
    says "estimated flow model". Do not remove those labels.
 4. **Never invent data.** No fabricated attendance, capacity or population figures. Missing input
    means a wider band plus a note, not a made-up number.
-5. **Time zone:** all event times are Europe/Helsinki. A start between 02:00 and 06:00 is a
-   suspected parsing bug — investigate, don't publish silently.
+5. **Time zone:** all event times are Europe/Helsinki. The day strip runs 06:00–06:00, so a
+   start before 06:00 is moved to the previous date before the event is filtered and published
+   (`night_date()` in `build.py`). A suspicious 02:00–05:59 start is still investigated rather
+   than accepted as a parsing accident.
 6. **Subpath safety:** the site is served from `/kilinkolin/`. Always use relative URLs
    (`./data.json`), never `/data.json`.
 7. **Keep attribution:** `LICENSE`, `NOTICE.md` and the footer credit stay.
@@ -43,7 +45,8 @@ only when the model does.
 
 ```
 web/            index.html, app.js, map.js, styles.css, config.js, data.json, geo/*.json
-scripts/        build.py (pipeline), validate.py (gate), routes.py (street geometry), feeds/ (adapters)
+scripts/        build.py (pipeline), calibration.py (fit/backtest), validate.py (gate),
+                routes.py (street geometry), feeds/ (adapters)
 data/           keikat.json (feed snapshot), seed_events.json (SAMPLE rows, never published)
 registry/       venues.json, zones.json  (hand-maintained)
 .github/        workflows/build.yml
@@ -57,7 +60,11 @@ python3 scripts/routes.py --from-flow     # only legs the current build draws (f
 python3 scripts/build.py --mode full      # fetch, normalise, model, write web/*
 python3 scripts/validate.py               # gate: schema + conservation + coverage
 python3 -m http.server -d web 3003        # local preview at :3003
+cd tests && npm ci && npx playwright install chromium && npm test  # model + browser tests
 ```
+
+The smoke test starts its own static server on :4173; it is also a blocking pre-deploy step in
+`.github/workflows/build.yml`.
 
 ## Publishers of data must be real
 
@@ -69,16 +76,73 @@ is not `OFF` or if a published title contains `SAMPLE`. Never ship a placeholder
 
 `web/data.json`:
 ```json
-{ "generated": "... UTC", "schema_version": 2, "model_version": "...",
+{ "generated": "... UTC", "schema_version": 3, "model_version": "...",
   "source_status": {...}, "coverage": {...},
+  "calibration": {"liiga": {...}, "competition": {...}, "tba_start": {...},
+                  "venue_collisions": {...}, "city_capacity": {...}},
   "events": [["date","time","title","venue","genre","free","url",
               "id","kind","category","sub","interest","attendance","sample","venue_id"]] }
 ```
-Indices 0–6 are frozen (older consumers read them positionally). Append only.
+Indices 0–6 are frozen (older consumers read them positionally). Append only. An empty `time`
+means the source published no start. The UI must label it TBA, and the heat must not be pinned
+to 19:00: the flow carries `start_options` (18:00, 19:00, 20:00) and `start_window`
+("18:00–20:00"), and the browser averages the arrival/egress curves over those candidate
+starts. The row's empty time is never filled in to look published.
 
-`web/geo/flows.json`: per event `attendance{low,mid,high}`, `interest{score,band,signals}`,
-`zones[]` (share of arrivals), `modes[]`, `legs[]`, `corridors[]` (straight fallback only),
-`arrival[]` and `egress[]` 15-minute slices.
+`web/geo/flows.json`: per event `attendance{low,mid,high,spread}`,
+`interest{score,band,signals}`, `basis{capacity,capacity_source,fill,fill_source,interest,
+spread,published_max_participants,competition{factor,peers},
+venue_collision{group_size,venue_capacity,combined_mid_before,combined_mid_after,factor,room_split}}`,
+`start_known`, `zones[]` (share
+of arrivals), `modes[]`, `legs[]`, `corridors[]` (straight fallback only), `arrival[]` and
+`egress[]` 15-minute slices. TBA flows also carry `start_options` and `start_window`.
+`attendance`, `legs[].people` and `corridors[].people` are scaled together by the competition
+factor and then by the venue-collision allocation.
+
+### Calibration contract
+
+- **Only realized attendance can produce a backtest error.** Liiga publishes `spectators` for
+  completed games; that is the only calibration target. The city calendar's `maxParticipants` is
+  a published cap, not an observed crowd, so never turn it into a fake “actual” or an error rate.
+- The hockey fill is fitted on completed Tampere home games. The fit replaces the prior only
+  when its leave-one-out MAPE is lower than the prior's; otherwise keep the prior and say why.
+  This compares the factor on games it did not see with the fixed prior, rather than rewarding an
+  in-sample fit. When the fit wins, report leave-one-out error. Keep the sample size, date range,
+  prior, fitted factor, in-sample MAPE for the fit, and leave-one-out median/mean error and bias
+  in `data.json.calibration.liiga`; the UI reads those fields. If there are fewer than eight games,
+  keep the prior and say the sample is insufficient.
+- Capacity provenance must be explicit: `city calendar maxParticipants`, `venue registry sport
+  capacity`, `venue registry gig capacity`, or the 20-seat floor. Do not use an arena's concert
+  capacity for a hockey game.
+- `validate.py` must fail if an event's capacity or mid estimate exceeds a published
+  `maxParticipants` cap, if the coverage count disagrees with the flows, if two rows have the
+  same venue/date/title/start, or if the calibration block is malformed.
+- The competition factor is a prior, never a fitted or measured substitution model. Only
+  same-day events with overlapping active windows compete. Catchment overlap compares the
+  published top-zone shares (unlisted remainder excluded) and must be at least 50%. The shared
+  slice is pooled once at the largest exposed demand and apportioned by exposure; unique slices
+  are retained and a 5% floor applies. Do not turn this into a raw peer-demand ratio: that
+  erased small events whenever many peers shared one central zone.
+- `data.json.calibration.competition` records `status: PRIOR`, the method, the floor, the
+  minimum overlap and the count of discounted flows. Every flow carries
+  `basis.competition{factor,peers}`; the panel shows the row only when `factor < 0.999`.
+- Venue collisions are grouped on **venue + date + exact published start**. TBA rows are not
+  grouped because they have no single published start. Cap the combined mid at the **smallest
+  applicable venue capacity** in the group (for mixed sport/gig configurations this is the
+  smaller published capacity), allocate the cap in proportion to the independent mids, and keep
+  the integer total exactly at or below the cap. Every shared group is an **unresolved room
+  split**: a per-event `maxParticipants` cap does not identify a room allocation. Emit
+  `basis.venue_collision{group_size,venue_capacity,combined_mid_before,combined_mid_after,
+  factor,room_split}` on every member and counts in `calibration.venue_collisions`. The panel
+  shows a **Venue split** row for these events even when the group already fits. The validator
+  must recompute each group's combined mid and fail if it exceeds the cap or the metadata counts
+  disagree. Do not group TBA rows or treat distinct room bookings as separate buildings without
+  a published room split.
+- `data.json.calibration.tba_start` records the unknown-start prior: `status: PRIOR`, the
+  documented `18:00–20:00` window, candidate starts 18:00/19:00/20:00, and the TBA flow count.
+  The build emits `start_options` and `start_window`; `map.js` averages the curves over the
+  options. Do not collapse a TBA event back to one 19:00 arrival peak. A TBA row is not marked
+  "occurring now" because it has no precise start.
 
 `legs[]` is what the map draws: `{key, name, share, people, mode, km, min}`. `key` resolves into
 `web/geo/routes.json`, a cache of real pedestrian geometry (`venue|hub:<id>` or
@@ -91,7 +155,13 @@ routing cache, and `registry/routes.json` keeps the full OSRM geometry.
 Every event must resolve to a real venue: a registry venue, or a venue generated from a feed's own
 published coordinates (the city calendar supplies both the point and the address). Generated
 venues live in `web/geo/venues.json` with an `address`; they are never hand-written into the
-registry and never guessed.
+registry and never guessed. A music row whose venue is only a district (for example `Nekala`)
+is dropped and logged instead of being published at `tampere_muu`. `validate.py` fails if any
+published event's venue has no address, if a source reports `FAILED`, or if a flow has no
+matching event.
+
+Feeds are not row-capped. A source that returns more events must publish all of them; silently
+truncating a sorted feed on every run would make the missing tail permanent.
 
 `map.js` sets `html.is-mobile` from `(max-width: 700px)` or a coarse pointer up to 1024px. On a
 phone it caps canvas DPR at 1.75 (2 on desktop), samples fewer heat points and draws four map

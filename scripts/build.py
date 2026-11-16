@@ -21,6 +21,7 @@ from collections import Counter, defaultdict
 from zoneinfo import ZoneInfo
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import calibration as calib  # noqa: E402  (same directory as this file)
 from feeds import kide as kide_feed  # noqa: E402  (adapter lives beside this file)
 from feeds import tampere_city as city_feed  # noqa: E402
 
@@ -29,8 +30,17 @@ WEB = os.path.join(ROOT, "web")
 GEO = os.path.join(WEB, "geo")
 
 KEIKAT_URL = "https://zakker111.github.io/tampere-keikat/data.json"
-MODEL_VERSION = "2026.11.5"
-SCHEMA_VERSION = 2
+MODEL_VERSION = "2026.11.11"
+SCHEMA_VERSION = 3
+FLOWS_SCHEMA_VERSION = 2
+COMPETITION_FLOOR = 0.05  # no event loses more than 95% of its independent demand
+COMPETITION_MIN_OVERLAP = 0.5  # weaker shared slices are inside the model's noise band
+# A missing start is a prior, not a published 19:00. Spread the heat uniformly over
+# three hourly candidates in a two-hour window centred on the old 19:00 fallback.
+TBA_START_WINDOW = (18 * 60, 20 * 60)
+TBA_START_OPTIONS = (18 * 60, 19 * 60, 20 * 60)
+TBA_START_WINDOW_LABEL = "18:00–20:00"
+TZ = ZoneInfo("Europe/Helsinki")
 
 # ---------------------------------------------------------------- taxonomy
 GROUPS = {
@@ -87,13 +97,57 @@ def log(*a):
 
 
 def clock_minutes(s):
-    """Same convention as the page: 02:00–05:59 belongs to the previous night."""
+    """Same convention as the page: a start before 06:00 belongs to the previous night."""
     try:
         h, m = (int(x) for x in (s or "19:00").split(":"))
     except (TypeError, ValueError):
         return 19 * 60
     v = h * 60 + m
     return v + 24 * 60 if v < 6 * 60 else v
+
+
+def start_options(time_s):
+    """Candidate start minutes used to spread the heat for a missing start.
+
+    A published time has exactly one candidate. A blank time is modelled uniformly
+    over the documented TBA window (18:00, 19:00, 20:00); the row itself keeps its
+    empty published time and the UI keeps the TBA label.
+    """
+    if (time_s or "").strip():
+        return [clock_minutes(time_s)]
+    return list(TBA_START_OPTIONS)
+
+
+def clean_feed_time(date_s, time_s):
+    """Discard a time that is really the event's day and month.
+
+    The upstream music feed sometimes writes a missing start as ``DD:MM`` for the
+    event date (2026-12-05 -> 05:12, 2026-11-21 -> 21:11). Those are not published
+    start times and two of them would also move the event to the previous day via
+    ``night_date``. Treat them like any other omitted start instead of inventing one.
+    """
+    if not time_s:
+        return time_s
+    try:
+        day = dt.date.fromisoformat(date_s)
+    except (TypeError, ValueError):
+        return time_s
+    return "" if time_s == f"{day.day:02d}:{day.month:02d}" else time_s
+
+
+def night_date(date_s, time_s):
+    """The day whose 06:00–06:00 strip contains an after-midnight start.
+
+    Source calendars label a 00:30 event with that calendar date, while this site's
+    day strip starts at 06:00. Without moving those starts back one date, a 00:30
+    event on 9 Dec is drawn at 00:30 on 10 Dec (the next day's `+1` stop).
+    """
+    try:
+        day = dt.date.fromisoformat(date_s)
+        hour = int((time_s or "").split(":")[0])
+    except (TypeError, ValueError):
+        return date_s
+    return (day - dt.timedelta(days=1)).isoformat() if hour < 6 else date_s
 
 
 def hav_km(a, b):
@@ -140,7 +194,8 @@ def fetch_liiga():
     The feed carries no calendar export, but the game list includes the rink,
     its coordinates and the teams, so home games can be pinned to Nokia Arena.
     """
-    season = dt.date.today().year + (1 if dt.date.today().month >= 8 else 0)
+    today_helsinki = dt.datetime.now(TZ).date()
+    season = today_helsinki.year + (1 if today_helsinki.month >= 8 else 0)
     url = LIIGA_URL.format(season=season)
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "kilinkolin/0.8 (+https://github.com/zakker111)"})
@@ -149,6 +204,7 @@ def fetch_liiga():
         if not isinstance(games, list):
             raise ValueError("unexpected game list")
         rows = []
+        observations = []
         for g in games:
             rink = g.get("iceRink") or {}
             home = (g.get("homeTeam") or {}).get("teamName") or ""
@@ -168,16 +224,27 @@ def fetch_liiga():
                 # real end only when the feed carried it, otherwise fall back to the
                 # planned playing time so we are not silently wrong about event length
                 end_min = start.hour * 60 + start.minute + gametime / 60.0
+            spectators = g.get("spectators")
+            try:
+                spectators = int(spectators) if spectators is not None else 0
+            except (TypeError, ValueError):
+                spectators = 0
+            if g.get("ended") and spectators > 0:
+                observations.append({
+                    "date": start.date().isoformat(), "time": start.strftime("%H:%M"),
+                    "title": f"{home} – {away}", "spectators": spectators,
+                })
             rows.append([
                 start.date().isoformat(), start.strftime("%H:%M"), f"{home} – {away}",
                 "Nokia Arena", "hockey", False, g.get("buyTicketsUrl") or "", "sport", "hockey", 0,
                 end_min,
             ])
-        log(f"[sports] fetched {len(rows)} Tampere home fixtures")
-        return rows, "OK"
+        log(f"[sports] fetched {len(rows)} Tampere home fixtures, "
+            f"{len(observations)} with reported attendance")
+        return rows, "OK", observations
     except Exception as exc:  # noqa: BLE001 - sports feed failure must not kill the build
         log(f"[sports] fetch failed: {exc}")
-        return [], f"FAILED: {exc}"
+        return [], f"FAILED: {exc}", []
 
 
 # ------------------------------------------------------------- normalising
@@ -199,9 +266,15 @@ def resolve_venue(raw, alias_idx, venues):
     head = low.split(",")[0].strip()
     if head in alias_idx:
         return next(v for v in venues if v["id"] == alias_idx[head])
-    for key, vid in alias_idx.items():
-        if len(key) > 4 and key in low:
-            return next(v for v in venues if v["id"] == vid)
+    # A substring match is a fallback, not a license for a short generic alias to
+    # win. "Hatanpään valtatie 1 / Lush Koskikeskus, 00100 Tampere" must resolve to
+    # Koskikeskus, not to the city-wide "Tampere" fallback or the first venue that
+    # happens to share the street address.
+    matches = [(len(key), key, vid) for key, vid in alias_idx.items()
+               if vid != "tampere_muu" and len(key) > 4 and key in low]
+    if matches:
+        _, _, vid = max(matches)
+        return next(v for v in venues if v["id"] == vid)
     return None
 
 
@@ -299,7 +372,8 @@ def interest_score(ev, cap, category, sub, venue):
     if hour is not None:
         if 18 <= hour <= 22:
             score += 7; signals.append(("prime start time", 7))
-        elif hour < 15:
+        elif 6 <= hour < 15:
+            # a 00:30 start is a late-night event, not a daytime one
             score -= 5; signals.append(("daytime start", -5))
     if ev.get("free"):
         score += 3; signals.append(("free entry", 3))
@@ -321,6 +395,19 @@ def interest_score(ev, cap, category, sub, venue):
     return {"score": round(score), "band": band, "signals": [{"name": n, "points": p} for n, p in signals]}
 
 
+def venue_capacity(venue, category):
+    """The venue's seat count for this kind of event.
+
+    An arena's concert capacity is not its hockey capacity. Using the larger number for a
+    Liiga game inflated every hockey estimate; the registry carries both, so pick the one
+    that matches the event instead of taking the maximum.
+    """
+    sport = int(venue["capacity"].get("sport", 0) or 0)
+    if category == "sports" and sport > 0:
+        return max(sport, 20)
+    return max(int(venue["capacity"].get("gig", 0) or 0), 20)
+
+
 def event_capacity(e, venue):
     """Per-event size signal, so a big gig/match/party reads big and a practice or
     small talk reads small instead of inheriting the whole venue's capacity.
@@ -333,10 +420,12 @@ def event_capacity(e, venue):
       * otherwise the venue's capacity prior (existing behaviour).
     Missing input keeps the venue prior rather than inventing a number.
     """
-    venue_cap = max(venue["capacity"].get("gig", 0), venue["capacity"].get("sport", 0), 20)
+    venue_cap = venue_capacity(venue, e.get("category"))
     mp = e.get("max_participants")
     if isinstance(mp, int) and mp > 0:
-        return max(20, min(mp, venue_cap))
+        # The 20-seat floor is a model prior for unknown venues. Applying it to a
+        # published cap would make the capacity exceed maxParticipants.
+        return min(mp, venue_cap)
     title_l = (e.get("title") or "").lower()
     if e.get("category") == "student" or e.get("kind") == "student":
         practice_kw = ("treenit", "treeni", "harjoitus", "harjoitukset", "practice",
@@ -348,9 +437,49 @@ def event_capacity(e, venue):
     return venue_cap
 
 
-def attendance_est(cap, category, sub, interest, ev):
-    fill = FILL.get(sub, CATEGORY_FALLBACK_FILL.get(category, 0.45))
-    if ev.get("seed") and category == "sports" and sub == "hockey":
+def fill_value(e):
+    return FILL.get(e["sub"], CATEGORY_FALLBACK_FILL.get(e["category"], 0.45))
+
+
+def allocate_collision(mids, capacity):
+    """Allocate a shared venue cap across simultaneous events.
+
+    Returns ``(allocated_mids, factor)``. If the group already fits, the mids are
+    unchanged and the factor is 1. Above the cap, the cap is split in proportion to
+    each event's independent mid and the integer remainder goes to the largest
+    fractional shares. This makes the combined mid exactly equal to the venue cap.
+    """
+    total = sum(mids)
+    if total <= capacity or total <= 0:
+        return list(mids), 1.0
+    if capacity <= 0:
+        return [0 for _ in mids], 0.0
+    raw = [mid * capacity / total for mid in mids]
+    allocated = [int(math.floor(value)) for value in raw]
+    remainder = capacity - sum(allocated)
+    order = sorted(range(len(mids)), key=lambda i: raw[i] - allocated[i], reverse=True)
+    for i in order[:remainder]:
+        allocated[i] += 1
+    return allocated, capacity / total
+
+
+def apply_flow_scale(flow, factor, mid_override=None):
+    """Scale a flow's attendance, legs and corridors together."""
+    for key in ("low", "mid", "high"):
+        flow["attendance"][key] = int(round(flow["attendance"][key] * factor))
+    if mid_override is not None:
+        flow["attendance"]["mid"] = int(mid_override)
+        flow["attendance"]["low"] = min(flow["attendance"]["low"], flow["attendance"]["mid"])
+        flow["attendance"]["high"] = max(flow["attendance"]["high"], flow["attendance"]["mid"])
+    for leg in flow.get("legs", []):
+        leg["people"] = int(round(float(leg.get("people", 0)) * factor))
+    for corridor in flow.get("corridors", []):
+        corridor["people"] = int(round(float(corridor.get("people", 0)) * factor))
+
+
+def attendance_est(cap, category, sub, interest, ev, fill_override=None):
+    fill = fill_override if fill_override is not None else fill_value(ev)
+    if ev.get("seed") and category == "sports" and sub == "hockey" and fill_override is None:
         fill = 0.92
     # Venue-size class prior: after capacity is accounted for, an evening in a hall or arena
     # still pulls a fuller room than a small pub or bar, and a 20-seat room is not a sell-out
@@ -367,7 +496,97 @@ def attendance_est(cap, category, sub, interest, ev):
     mid = cap * fill * (0.72 + 0.45 * interest["score"] / 100.0) * venue_scale
     mid = min(mid, cap * 1.0)
     spread = 0.35 if cap < 500 else 0.22
-    return {"low": int(mid * (1 - spread)), "mid": int(mid), "high": int(min(cap, mid * (1 + spread)))}
+    return {"low": int(mid * (1 - spread)), "mid": int(mid), "high": int(min(cap, mid * (1 + spread))),
+            "spread": spread}
+
+
+def capacity_source(e, venue):
+    """Human-readable provenance for the capacity used by the estimate."""
+    mp = e.get("max_participants")
+    venue_cap = venue_capacity(venue, e.get("category"))
+    if isinstance(mp, int) and mp > 0:
+        if mp > venue_cap:
+            return "city calendar maxParticipants, capped by the venue's capacity"
+        return "city calendar maxParticipants"
+    if e.get("category") == "sports" and int(venue["capacity"].get("sport", 0) or 0) > 0:
+        return "venue registry sport capacity"
+    if int(venue["capacity"].get("gig", 0) or 0) > 0:
+        return "venue registry gig capacity"
+    return "model floor (20 seats)"
+
+
+def fill_source(e, calibration):
+    """Human-readable provenance for the fill factor used by the estimate."""
+    if e.get("category") == "sports" and e.get("sub") == "hockey":
+        liiga = (calibration or {}).get("liiga") or {}
+        if liiga.get("status") == "FITTED":
+            return f"fitted on {liiga['sample']} Liiga games with reported attendance"
+        if liiga.get("status") == "PRIOR":
+            return "hockey prior (the fitted factor did not beat the prior)"
+        return "hockey prior (not enough reported attendance to fit)"
+    return "category prior"
+
+
+def calibrate_liiga(observations, alias_idx):
+    """Fit the hockey fill factor to realized Liiga attendance and backtest it.
+
+    The production factor is fitted on every completed game with reported spectators. The
+    published error is leave-one-out: each game is predicted by a factor fitted without it,
+    so the error is not the same in-sample fit that produced the factor. The fitted factor
+    replaces the prior only when that out-of-sample error beats the prior's. If there are
+    fewer than eight observations, the prior stays.
+    """
+    prior = FILL.get("hockey", 0.85)
+    venue = resolve_venue("Nokia Arena", alias_idx, VENUES)
+    samples = []
+    if venue and venue["id"] != "tampere_muu":
+        for obs in observations:
+            ev = {
+                "date": obs["date"], "time": obs["time"], "title": obs["title"],
+                "venue": venue, "free": False, "hour": int(obs["time"].split(":")[0]),
+                "category": "sports", "sub": "hockey", "kind": "sport", "seed": False,
+            }
+            cap = event_capacity(ev, venue)
+            interest = interest_score(ev, cap, "sports", "hockey", venue)
+            samples.append({"actual": int(obs["spectators"]), "cap": cap,
+                            "interest": interest, "ev": ev})
+
+    base = {
+        "source": "Liiga public game list",
+        "metric": "reported spectators",
+        "sample": len(samples),
+        "prior_fill": round(prior, 3),
+        "fitted_fill": round(prior, 3),
+        "status": "UNAVAILABLE" if not samples else "INSUFFICIENT",
+        "method": "one hockey fill factor, fitted by mean absolute percentage error; "
+                  "it replaces the prior only when its leave-one-out MAPE is lower; "
+                  "the published error is leave-one-out",
+    }
+    if samples:
+        base["from"] = min(s["ev"]["date"] for s in samples)
+        base["to"] = max(s["ev"]["date"] for s in samples)
+    if len(samples) < 8:
+        return base
+
+    def predict(sample, factor):
+        return attendance_est(sample["cap"], "sports", "hockey", sample["interest"],
+                              sample["ev"], fill_override=factor)["mid"]
+
+    fit = calib.fit_single_factor(samples, predict, prior)
+    prior_mape = sum(abs(predict(s, prior) - s["actual"]) / s["actual"] for s in samples) / len(samples)
+    loo = calib.leave_one_out(samples, predict, prior)
+    if fit and loo and loo["sample"] == len(samples) and loo["mape"] < prior_mape:
+        fitted = fit[0]
+        base["status"] = "FITTED"
+        base["fitted_mape"] = round(fit[1], 3)
+        base.update(loo)
+    else:
+        fitted = prior
+        base["status"] = "PRIOR"
+    FILL["hockey"] = fitted
+    base["fitted_fill"] = round(fitted, 3)
+    base["prior_mape"] = round(prior_mape, 3)
+    return base
 
 
 MODE_BY_KM = [
@@ -553,6 +772,68 @@ def summarise_modes(zone_rows, cls="B"):
     return [{"mode": m, "share": round(v / total, 3)} for m, v in sorted(agg.items(), key=lambda kv: -kv[1])]
 
 
+def catchment_overlap(zones_a, zones_b):
+    """Intersection of two events' top-zone arrival shares, in [0, 1].
+
+    Only the published top-zone rows are compared. The unlisted remainder is not
+    assumed to overlap: two events can both have a long tail without drawing the same
+    people.
+    """
+    a = {z["zone_id"]: float(z.get("share", 0.0)) for z in (zones_a or [])}
+    b = {z["zone_id"]: float(z.get("share", 0.0)) for z in (zones_b or [])}
+    return min(1.0, sum(min(a[key], b[key]) for key in a.keys() & b.keys()))
+
+
+def competition_factor(flow, peers):
+    """Count an overlapping catchment's shared slice once, not once per event.
+
+    For each same-day peer, the shared exposure is the fraction of the shorter active
+    window that overlaps times the overlap of the two top-zone catchments. Only pairs
+    with at least ``COMPETITION_MIN_OVERLAP`` shared catchment are treated as competing;
+    below that the overlap is inside the model's noise band.
+
+    The shared slice is one demand pool sized by the largest exposed event. Each event
+    keeps its unique slice and receives a share of the pool proportional to its own
+    exposed demand. This is an explicit sharing prior, not a fitted substitution model:
+    two equal events with the same time and full catchment overlap each keep half; a
+    small event keeps its unique catchment and a proportional share of a larger event's
+    pool instead of being erased. Disjoint catchments and non-overlapping times do not
+    compete.
+    """
+    start, end = flow.get("start"), flow.get("end")
+    demand = max(1.0, float((flow.get("attendance") or {}).get("mid", 0.0)))
+    if start is None or end is None or end <= start:
+        return 1.0, 0
+    duration = max(1.0, end - start)
+    exposures = []
+    for other in peers:
+        other_start, other_end = other.get("start"), other.get("end")
+        if other_start is None or other_end is None or other_end <= other_start:
+            continue
+        overlap = min(end, other_end) - max(start, other_start)
+        if overlap <= 0:
+            continue
+        temporal = min(1.0, overlap / max(1.0, min(duration, other_end - other_start)))
+        shared = catchment_overlap(flow.get("zones"), other.get("zones"))
+        if shared < COMPETITION_MIN_OVERLAP:
+            continue
+        other_demand = max(1.0, float((other.get("attendance") or {}).get("mid", 0.0)))
+        exposures.append((other_demand, temporal * shared))
+    if not exposures:
+        return 1.0, 0
+
+    # The largest pairwise slice is the shared pool; do not discount the same slice
+    # repeatedly just because several peers share it. Peer exposures are summed to
+    # apportion that pool between everyone drawing on it.
+    own_shared = demand * max(exposure for _, exposure in exposures)
+    peer_shared = sum(other_demand * exposure for other_demand, exposure in exposures)
+    total_shared = own_shared + peer_shared
+    pool = max([own_shared] + [other_demand * exposure for other_demand, exposure in exposures])
+    retained = demand - own_shared + pool * own_shared / total_shared
+    factor = min(1.0, max(COMPETITION_FLOOR, retained / demand))
+    return factor, len(exposures)
+
+
 KIDE_SUBS = (("sitsit", "sitsit"), ("appro", "party"), ("sauna", "sauna"),
              ("treenit", "sports"), ("treeni", "sports"), ("turnaus", "sports"),
              ("teatteri", "culture"), ("näytelm", "culture"))
@@ -587,6 +868,36 @@ CITY_PREFIX = "city-"
 def norm_title(title):
     """Loose key for spotting the same event published by two sources."""
     return " ".join("".join(c for c in (title or "").lower() if c.isalnum() or c.isspace()).split())
+
+
+def dedupe_events(events):
+    """Collapse duplicate listings for the same venue, date and start.
+
+    A repeated performance keeps its distinct start time. A row with no start time is not
+    merged with a timed row: the missing time is an assumption, not evidence that the two
+    listings are the same event. The first listing keeps its identity; missing end/url/cap
+    fields are filled from the duplicate.
+    """
+    kept, by_key = [], {}
+    merged = 0
+    for e in events:
+        key = (e["date"], e["venue"]["id"], norm_title(e["title"]), (e.get("time") or "").strip())
+        first = by_key.get(key)
+        if first is None:
+            by_key[key] = e
+            kept.append(e)
+            continue
+        merged += 1
+        if first.get("end_min") is None and e.get("end_min") is not None:
+            first["end_min"] = e["end_min"]
+        if not first.get("max_participants") and e.get("max_participants"):
+            first["max_participants"] = e["max_participants"]
+        if not first.get("url") and e.get("url"):
+            first["url"] = e["url"]
+        # A sample row only stays a sample when every duplicate is a sample. Conflicting
+        # free/paid claims keep the first source's value instead of inventing one.
+        first["seed"] = bool(first.get("seed") and e.get("seed"))
+    return kept, merged
 
 
 def place_name(address):
@@ -655,6 +966,12 @@ def kide_detail_venue(ev, detail):
     postal = " ".join((detail.get("postalCode") or "").split())
     city = " ".join((detail.get("city") or "").split())
     address = street + (", " + " ".join(p for p in (postal, city) if p) if postal or city else "")
+    # Prefer a venue name that the detail address actually contains. A bare address
+    # match is ambiguous in a shared building: "Hatanpään valtatie 1 / Lush
+    # Koskikeskus" must not become Ilves Bar & Night just because both are at number 1.
+    existing = resolve_venue(address, build_alias_index(VENUES), VENUES)
+    if existing and existing["id"] != "tampere_muu":
+        return existing
     existing = resolve_by_address(address, VENUES)
     if existing and existing["id"] != "tampere_muu":
         return existing
@@ -720,7 +1037,8 @@ def build(mode="full", with_samples=False):
     feed, music_status = fetch_keikat()
     # data/seed_events.json holds SAMPLE placeholders only; they are never published
     seed = load_json(os.path.join(ROOT, "data", "seed_events.json")) if with_samples else {"events": []}
-    sports_rows, sports_status = fetch_liiga()
+    sports_rows, sports_status, liiga_observations = fetch_liiga()
+    calibration = {"liiga": calibrate_liiga(liiga_observations, alias_idx)}
     student_rows, student_status = kide_rows(alias_idx)
     # kide_rows can add a venue whose location came from the product detail endpoint;
     # include those names before the student rows are resolved a second time.
@@ -731,18 +1049,25 @@ def build(mode="full", with_samples=False):
 
     events = []
     unmatched = Counter()
+    leaked_times = 0
 
     for row in feed.get("events", []):
         if len(row) < 7:
             continue
         date, time_s, title, venue_raw, genre, free, url = row[:7]
+        cleaned = clean_feed_time(date, time_s)
+        if time_s and not cleaned:
+            leaked_times += 1
+        time_s = cleaned
         venue = resolve_venue(venue_raw, alias_idx, VENUES)
         if not venue or venue["id"] == "tampere_muu":
             # a real street address in the row beats the generic fallback venue
             venue = resolve_by_address(f"{venue_raw} {title}", VENUES) or venue
-        if not venue:
-            unmatched[venue_raw] += 1
-            venue = next(v for v in VENUES if v["id"] == "tampere_muu")
+        if not venue or venue["id"] == "tampere_muu":
+            # A district or other vague place is not a street address. Drop the row
+            # instead of publishing it at an unlocatable fallback venue.
+            unmatched[venue_raw or "(no venue)"] += 1
+            continue
         hour = None
         if time_s and ":" in time_s:
             try:
@@ -774,21 +1099,19 @@ def build(mode="full", with_samples=False):
 
     # Theatre, culture and community rows from the city calendar. Each one carries its own
     # published coordinates, so an unregistered place becomes a real venue instead of a fallback.
-    seen_titles = {(e["date"], norm_title(e["title"])) for e in events}
-    city_kept, city_dup, city_new = 0, 0, 0
+    # Keep every row: dedupe_events() below is the single duplicate gate and includes the venue,
+    # so two venues showing the same title at the same time both survive.
+    city_kept, city_new = 0, 0
     for item in city_items:
-        key = (item["date"], norm_title(item["title"]))
-        if key in seen_titles:
-            city_dup += 1
-            continue
         venue = resolve_venue(item["place"], alias_idx, VENUES) or resolve_by_address(item["place"], VENUES)
         if not venue or venue["id"] == "tampere_muu":
+            before = len(VENUES)
             venue = place_venue(item)
-            city_new += 1
+            if len(VENUES) > before:
+                city_new += 1
         category, sub3 = classify(item["kind"], item["sub"], None, item["title"])
         start_min = clock_minutes(item["time"])
         end_min = start_min + item["minutes"] if item["minutes"] else None
-        seen_titles.add(key)
         city_kept += 1
         events.append({
             "date": item["date"], "time": item["time"], "title": item["title"],
@@ -799,13 +1122,23 @@ def build(mode="full", with_samples=False):
             "max_participants": int(item.get("max_participants") or 0),
         })
     if city_items:
-        log(f"[city] {city_kept} events placed ({city_new} on a new calendar location), "
-            f"{city_dup} duplicates of another source skipped")
+        log(f"[city] {city_kept} events placed ({city_new} new calendar venue(s))")
+
+    events, merged_listings = dedupe_events(events)
+    if merged_listings:
+        log(f"[events] merged {merged_listings} duplicate listing(s) at the same venue and start")
 
     if unmatched:
-        log(f"[venues] unresolved strings mapped to fallback: {dict(unmatched)}")
+        log(f"[venues] music rows dropped for an unknown venue: {dict(unmatched)}")
+    if leaked_times:
+        log(f"[music] {leaked_times} start time(s) repeated the event date; treated as missing")
 
-    today = dt.date.today().isoformat()
+    # The UI's day strip runs 06:00–06:00, so an 00:30 start belongs to the previous
+    # strip. Do this before the date filter; an after-midnight event earlier today is
+    # already past, while one tomorrow belongs on today's strip.
+    for e in events:
+        e["date"] = night_date(e["date"], e["time"])
+    today = dt.datetime.now(TZ).date().isoformat()
     events = [e for e in events if e["date"] >= today]
     events.sort(key=lambda e: (e["date"], e["time"] or "99:99"))
 
@@ -824,12 +1157,16 @@ def build(mode="full", with_samples=False):
     rows, flows, ev_geo = [], [], []
     by_cat = Counter()
     by_area = Counter()
+    city_capacity = {"events_with_published_capacity": 0}
+    tba_events = sum(1 for e in events if not (e.get("time") or "").strip())
 
     for i, e in enumerate(events):
         venue = e["venue"]
         cap = event_capacity(e, venue)
         interest = interest_score(e, cap, e["category"], e["sub"], venue)
         att = attendance_est(cap, e["category"], e["sub"], interest, e)
+        if isinstance(e.get("max_participants"), int) and e["max_participants"] > 0:
+            city_capacity["events_with_published_capacity"] += 1
         cls, zone_rows = gravity(e, venue, ZONES)
         legs = legs_for(venue, zone_rows, ROUTES, HUB_NAMES, HUB_KINDS, att["mid"])
         corridors = [] if legs else corridors_for(venue, zone_rows, hubs, att["mid"])
@@ -839,6 +1176,7 @@ def build(mode="full", with_samples=False):
         by_area[venue["area"]] += 1
 
         start_min = clock_minutes(e["time"])
+        starts = start_options(e["time"])
         # Prefer a real end time from the feed when an adapter provides one.
         if e.get("end_min") is not None:
             end_min = float(e["end_min"])
@@ -860,6 +1198,16 @@ def build(mode="full", with_samples=False):
         flows.append({
             "id": eid, "venue_id": venue["id"], "class": cls,
             "attendance": att, "interest": interest,
+            "start_known": bool((e.get("time") or "").strip()),
+            "basis": {
+                "capacity": cap,
+                "capacity_source": capacity_source(e, venue),
+                "fill": round(fill_value(e), 3),
+                "fill_source": fill_source(e, calibration),
+                "interest": interest["score"],
+                "spread": att["spread"],
+                "published_max_participants": e.get("max_participants") or None,
+            },
             "zones": zone_rows[:8],
             "rest_share": round(max(0.0, 1 - sum(z["share"] for z in zone_rows[:8])), 4),
             "modes": modes, "legs": legs, "corridors": corridors,
@@ -867,13 +1215,125 @@ def build(mode="full", with_samples=False):
             "arrival": [{"t": t, "share": s} for t, s in ARRIVAL[cls]],
             "egress": egress,
         })
+        if len(starts) > 1:
+            flows[-1]["start_options"] = starts
+            flows[-1]["start_window"] = TBA_START_WINDOW_LABEL
         ev_geo.append({"id": eid, "venue_id": venue["id"], "lat": venue["lat"], "lon": venue["lon"],
                        "date": e["date"], "attendance": att["mid"], "interest": interest["score"]})
 
+    # Competition is applied after every event has an independent demand estimate. It
+    # scales the whole flow (attendance, legs and corridors) so the panel, dots and heat
+    # all use the same adjusted number. See competition_factor() for the assumptions.
+    by_date = defaultdict(list)
+    for i, e in enumerate(events):
+        by_date[e["date"]].append(i)
+    competition_events = 0
+    for i, e in enumerate(events):
+        peers = [flows[j] for j in by_date[e["date"]] if j != i]
+        factor, peer_count = competition_factor(flows[i], peers)
+        flows[i]["basis"]["competition"] = {
+            "factor": round(factor, 3),
+            "peers": peer_count,
+        }
+        if round(factor, 3) < 0.999:
+            competition_events += 1
+        if factor < 1.0:
+            for key in ("low", "mid", "high"):
+                flows[i]["attendance"][key] = int(round(flows[i]["attendance"][key] * factor))
+            rows[i][12] = flows[i]["attendance"]["mid"]
+            ev_geo[i]["attendance"] = flows[i]["attendance"]["mid"]
+            for leg in flows[i].get("legs", []):
+                leg["people"] = int(round(float(leg.get("people", 0)) * factor))
+            for corridor in flows[i].get("corridors", []):
+                corridor["people"] = int(round(float(corridor.get("people", 0)) * factor))
+    # Venue/date/start collision guard. Distinct listings at one building and one
+    # published start are not separate rooms until the source says so; cap the group
+    # at the smallest applicable venue capacity and flag an unpublished room split.
+    collision_groups = defaultdict(list)
+    for i, flow in enumerate(flows):
+        if not flow.get("start_known"):
+            continue  # a TBA row has no single published start to collide on
+        collision_groups[(flow["venue_id"], events[i]["date"], flow["start"])].append(i)
+    venue_collisions = {
+        "status": "CAP",
+        "groups": 0,
+        "events": 0,
+        "capped_groups": 0,
+        "unresolved_room_splits": 0,
+        "method": "same venue + date + published start: cap combined mid at the smallest "
+                  "applicable venue capacity and allocate proportionally; flag every shared "
+                  "group as an unresolved room split",
+        "note": "TBA rows have no single published start and are not grouped. A published "
+                "maxParticipants is a per-event cap, not evidence of which room a listing uses.",
+    }
+    for idxs in collision_groups.values():
+        if len(idxs) < 2:
+            continue
+        venue_collisions["groups"] += 1
+        venue_collisions["events"] += len(idxs)
+        capacity = min(venue_capacity(events[i]["venue"], events[i]["category"])
+                       for i in idxs)
+        before = sum(flows[i]["attendance"]["mid"] for i in idxs)
+        targets, factor = allocate_collision(
+            [flows[i]["attendance"]["mid"] for i in idxs], capacity)
+        # A per-event maxParticipants does not identify which room each listing uses,
+        # so every shared-building group stays an unresolved split.
+        room_split = "UNRESOLVED"
+        venue_collisions["unresolved_room_splits"] += 1
+        if before > capacity:
+            venue_collisions["capped_groups"] += 1
+        for i, target in zip(idxs, targets):
+            flow = flows[i]
+            if target != flow["attendance"]["mid"]:
+                apply_flow_scale(flow, target / flow["attendance"]["mid"], target)
+                rows[i][12] = flow["attendance"]["mid"]
+                ev_geo[i]["attendance"] = flow["attendance"]["mid"]
+            flow["basis"]["venue_collision"] = {
+                "group_size": len(idxs),
+                "venue_capacity": capacity,
+                "combined_mid_before": before,
+                "combined_mid_after": sum(targets),
+                "factor": round(factor, 3),
+                "room_split": room_split,
+                "note": "Same venue and published start; the combined estimate shares one "
+                        "building cap. Room-level allocation is not published.",
+            }
+    calibration["venue_collisions"] = venue_collisions
+
+    calibration["tba_start"] = {
+        "status": "PRIOR",
+        "window": TBA_START_WINDOW_LABEL,
+        "window_minutes": list(TBA_START_WINDOW),
+        "assumed_starts": ["18:00", "19:00", "20:00"],
+        "method": "unknown starts are averaged uniformly over 18:00, 19:00 and 20:00; "
+                  "arrival and egress curves are mixed instead of pinned to one peak",
+        "events_with_unknown_start": tba_events,
+        "note": "The feed published no start; the row keeps its empty time and the UI says TBA. "
+                "This is a documented uncertainty window, not a measured start.",
+    }
+    calibration["competition"] = {
+        "status": "PRIOR",
+        "method": "shared-catchment demand pool: require >=50% top-zone overlap and an "
+                  "overlapping active window; count the shared slice once at the largest "
+                  "exposed event and apportion it by exposure; floor 0.05",
+        "floor": COMPETITION_FLOOR,
+        "min_catchment_overlap": COMPETITION_MIN_OVERLAP,
+        "events_with_competition": competition_events,
+        "note": "Not fitted or measured: a prior for sharing demand between concurrent events. "
+                "Only top-zone shares are compared; the unlisted remainder is not assumed to overlap. "
+                "Unique catchment slices are retained, so a smaller event is not erased by a larger peer.",
+    }
+
+    calibration["city_capacity"] = {
+        "source": "Tampere city calendar maxParticipants",
+        "events_with_published_capacity": city_capacity["events_with_published_capacity"],
+        "note": "maxParticipants is a published cap, not realized attendance; it is never used as backtest ground truth.",
+    }
     data_doc = {
         "generated": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
         "schema_version": SCHEMA_VERSION,
         "model_version": MODEL_VERSION,
+        "calibration": calibration,
         "source_note": "Music from tampere-keikat (read-only), hockey fixtures from the Liiga game list, student events from Kide, stage/culture/community events from the Tampere city calendar. Every row comes from a published feed; the SAMPLE seed file is only used with --with-samples.",
         "source_status": status,
         "coverage": {"by_category": dict(by_cat), "by_area": dict(by_area), "total": len(rows)},
@@ -885,7 +1345,7 @@ def build(mode="full", with_samples=False):
     write(os.path.join(GEO, "venues.json"), venues_out)
     write(os.path.join(GEO, "zones.json"), {"schema_version": 1, "zones": ZONES})
     write(os.path.join(GEO, "flows.json"), {
-        "schema_version": 1, "model_version": MODEL_VERSION,
+        "schema_version": FLOWS_SCHEMA_VERSION, "model_version": MODEL_VERSION,
         "generated": data_doc["generated"], "events": flows, "venues": ev_geo,
     })
     used_routes = {}

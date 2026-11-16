@@ -3,5 +3,8 @@ __pycache__/
 .DS_Store
 .venv/
 node_modules/
+tests/test-results/
+tests/playwright-report/
+tests/blob-report/
 *.log
 artifacts/

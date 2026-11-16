@@ -3,15 +3,15 @@
 (() => {
   "use strict";
   const CFG = window.KILINKOLIN || {};
-  /* least likely -> most likely: yellow, amber, orange, red, deep red */
-  const HEAT = ["#f4c20d", "#ee9f18", "#e66f1a", "#d13319", "#960d0a"]; // legend swatches only
   const TILE = 256;
+  const HEAT_SCALE = 0.4;
   const MOBILE = window.matchMedia("(max-width: 700px), (pointer: coarse) and (max-width: 1024px), (max-width: 1000px) and (max-height: 520px)").matches;
   document.documentElement.classList.toggle("is-mobile", MOBILE);
   document.documentElement.dataset.mobile = MOBILE ? "true" : "false";
 
-  const S = { events: [], flows: {}, venues: {}, zoneMeta: null, routes: {}, map: null, dotHits: [],
-              hoverId: null, onHover: null, day: null, minutes: 19 * 60 };
+  const S = { events: [], flows: {}, venues: {}, routes: {}, map: null, dotHits: [],
+              hoverId: null, onHover: null, day: null, minutes: 19 * 60,
+              aggVersion: 0, heatKey: null, heatLayer: null, shapes: [] };
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
@@ -27,13 +27,16 @@
       this.tiles = new Map();
       this.paint = null;
       this._z = 12; this._scale = 1; this._ox = 0; this._oy = 0;
+      this._zoomRaf = null;
       this._bind();
       this.resize();
     }
     resize() {
-      const dpr = Math.min(window.devicePixelRatio || 1, MOBILE ? 1.75 : 2);
       const w = this.canvas.clientWidth || 800;
       const h = this.canvas.clientHeight || 520;
+      // Large canvases are fill-rate bound; 1.5x is visually ample for the heat
+      // and keeps retina desktops from painting 2x the pixels every frame.
+      const dpr = Math.min(window.devicePixelRatio || 1, MOBILE ? 1.75 : (w * h > 900000 ? 1.5 : 2));
       this.w = w; this.h = h; this.dpr = dpr;
       this.canvas.width = Math.round(w * dpr);
       this.canvas.height = Math.round(h * dpr);
@@ -71,11 +74,11 @@
       this.canvas.style.cursor = hit ? "pointer" : "grab";
       const id = hit ? hit.ev.id : null;
       if (id === S.hoverId) {
-        if (hit) showTipAt(mx, my); else if (S.hideTip) S.hideTip();
+        if (hit) showTipAt(mx, my, hit); else if (S.hideTip) S.hideTip();
         return;
       }
       S.hoverId = id;
-      if (hit) showTipAt(mx, my);
+      if (hit) showTipAt(mx, my, hit);
       else if (S.hideTip) S.hideTip();
       if (S.onHover) S.onHover(id);
       this.schedule();
@@ -149,7 +152,7 @@
         this.zoom = start + (end - start) * eased;
         this.draw();
         if (k < 1) this._zoomRaf = requestAnimationFrame(step);
-        else this._zoomRaf = null;
+        else { this._zoomRaf = null; this.schedule(); }
       };
       this._zoomRaf = requestAnimationFrame(step);
     }
@@ -176,6 +179,7 @@
       const end = (e) => {
         const wasTap = down && e && Math.hypot((e.clientX || 0) - down.x, (e.clientY || 0) - down.y) < 8 && Date.now() - down.t < 700;
         drag = null; down = null; c.style.cursor = "grab";
+        this.schedule();
         if (wasTap && this.onTap) this.onTap(e);
       };
       c.addEventListener("pointerup", end);
@@ -214,113 +218,137 @@
     [1.00, [150, 13, 10]],
   ];
 
-  function rampAt(t) {
-    const v = Math.min(1, Math.max(0, t));
-    for (let i = 1; i < RAMP.length; i++) {
-      if (v <= RAMP[i][0]) {
-        const [t0, c0] = RAMP[i - 1];
-        const [t1, c1] = RAMP[i];
-        const f = (v - t0) / (t1 - t0 || 1);
-        return [0, 1, 2].map((k) => Math.round(c0[k] + (c1[k] - c0[k]) * f));
+  const RAMP_LUT = (() => {
+    const lut = new Uint8Array(256 * 3);
+    for (let i = 0; i < 256; i++) {
+      const v = i / 255;
+      let colour = RAMP[RAMP.length - 1][1];
+      for (let j = 1; j < RAMP.length; j++) {
+        if (v <= RAMP[j][0]) {
+          const [t0, c0] = RAMP[j - 1];
+          const [t1, c1] = RAMP[j];
+          const f = (v - t0) / (t1 - t0 || 1);
+          colour = [0, 1, 2].map((k) => Math.round(c0[k] + (c1[k] - c0[k]) * f));
+          break;
+        }
       }
+      lut[i * 3] = colour[0];
+      lut[i * 3 + 1] = colour[1];
+      lut[i * 3 + 2] = colour[2];
     }
-    return RAMP[RAMP.length - 1][1];
-  }
+    return lut;
+  })();
 
-  function lengthOf(pts) {
-    let len = 0;
-    for (let i = 1; i < pts.length; i++) len += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
-    return len;
-  }
-
-  function pointOn(pts, target) {
-    let run = 0;
+  function cumulativeLengths(pts) {
+    const cum = [0];
     for (let i = 1; i < pts.length; i++) {
-      const a = pts[i - 1], b = pts[i];
-      const seg = Math.hypot(b.x - a.x, b.y - a.y);
-      if (run + seg >= target || i === pts.length - 1) {
-        const f = seg ? Math.min(1, Math.max(0, (target - run) / seg)) : 0;
-        return { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f };
-      }
-      run += seg;
+      cum.push(cum[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y));
     }
-    return pts[0];
+    return cum;
   }
 
-  /* half-resolution buffer: smooth heat, cheap to colourise every frame */
+  function stampAlong(c, sprite, pts, cum, count, radius) {
+    const total = cum[cum.length - 1] || 0;
+    let seg = 1;
+    for (let k = 0; k <= count; k++) {
+      const target = total * k / count;
+      while (seg < pts.length - 1 && cum[seg] < target) seg++;
+      const a = pts[seg - 1], b = pts[seg] || a;
+      const span = cum[seg] - cum[seg - 1];
+      const f = span ? Math.min(1, Math.max(0, (target - cum[seg - 1]) / span)) : 0;
+      const x = a.x + (b.x - a.x) * f, y = a.y + (b.y - a.y) * f;
+      c.drawImage(sprite, x - radius, y - radius, radius * 2, radius * 2);
+    }
+  }
+
+  /* reduced-resolution buffer: smooth heat, cheap to colourise every frame */
   function ensureHalf(map) {
-    const w = Math.max(1, Math.round(map.w / 2));
-    const h = Math.max(1, Math.round(map.h / 2));
+    const w = Math.max(1, Math.round(map.w * HEAT_SCALE));
+    const h = Math.max(1, Math.round(map.h * HEAT_SCALE));
     if (!S.half) S.half = document.createElement("canvas");
     if (S.half.width !== w || S.half.height !== h) { S.half.width = w; S.half.height = h; }
     const c = S.half.getContext("2d");
     c.setTransform(1, 0, 0, 1, 0, 0);
     c.clearRect(0, 0, w, h);
     c.globalCompositeOperation = "lighter";
-    c.scale(0.5, 0.5);
+    c.scale(HEAT_SCALE, HEAT_SCALE);
     return S.half;
   }
 
-  function deposit(half, shapes, topDensity, zoom) {
+  let heatSprite = null, homeSprite = null;
+  function makeHeatSprite(midStop) {
+    const size = 64;
+    const canvas = document.createElement("canvas");
+    canvas.width = size; canvas.height = size;
+    const c = canvas.getContext("2d");
+    const g = c.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+    g.addColorStop(0, "rgba(255,255,255,1)");
+    g.addColorStop(midStop, "rgba(255,255,255,.5)");
+    g.addColorStop(1, "rgba(255,255,255,0)");
+    c.fillStyle = g;
+    c.fillRect(0, 0, size, size);
+    return canvas;
+  }
+
+  function deposit(half, shapes, zoom) {
     const c = half.getContext("2d");
+    if (!heatSprite) heatSprite = makeHeatSprite(0.45);
+    if (!homeSprite) homeSprite = makeHeatSprite(0.55);
     // traffic concentration: people per metre of street, not per route
-    const density = shapes.map((s) => Math.max(1, s.people) / Math.max(80, lengthOf(s.pts)));
-    const top = topDensity || Math.max.apply(null, density.concat([1e-6]));
-    const topPeople = Math.max.apply(null, shapes.map((s) => Math.max(1, s.people)).concat([1]));
+    const lens = shapes.map((s) => s.cum[s.cum.length - 1] || 0);
+    const density = shapes.map((s, i) => Math.max(1, s.people) / Math.max(80, lens[i]));
+    const top = Math.max(1e-6, ...density);
+    const topPeople = Math.max(1, ...shapes.map((s) => Math.max(1, s.people)));
     shapes.forEach((s, i) => {
-      const len = lengthOf(s.pts);
+      const len = lens[i];
       // sqrt-ish: a long approach with few people still needs to be seen
       const weight = Math.pow(Math.min(1, density[i] / top), 0.6);
-      const n = Math.max(6, Math.min(MOBILE ? 140 : 320, Math.round(len / 4)));
+      const n = Math.max(6, Math.min(MOBILE ? 120 : 180, Math.round(len / 7)));
       // wider kernels when zoomed out, so long approaches read as heat and not as hairlines
       const zoomBoost = Math.min(2.4, Math.max(0.6, Math.pow(2, 13.2 - zoom)));
-      const radius = (4 + 7.5 * weight) * zoomBoost;
+      const radius = (6 + 7.5 * weight) * zoomBoost;
       const alpha = 0.10 + 0.27 * weight;
       // origin patch: where this part of the crowd comes from. Sized by people, not by
       // walk length, so a distant district still reads as a source area.
       const home = s.pts[0];
       const share = Math.pow(Math.max(1, s.people) / topPeople, 0.6);
       const homeRadius = (7 + 12 * share) * zoomBoost;
-      const g0 = c.createRadialGradient(home.x, home.y, 0, home.x, home.y, homeRadius);
-      g0.addColorStop(0, `rgba(255,255,255,${0.1 + 0.3 * share})`);
-      g0.addColorStop(0.55, `rgba(255,255,255,${0.05 + 0.15 * share})`);
-      g0.addColorStop(1, "rgba(255,255,255,0)");
-      c.fillStyle = g0;
-      c.beginPath();
-      c.arc(home.x, home.y, homeRadius, 0, Math.PI * 2);
-      c.fill();
+      c.globalAlpha = 0.1 + 0.3 * share;
+      c.drawImage(homeSprite, home.x - homeRadius, home.y - homeRadius, homeRadius * 2, homeRadius * 2);
 
-      for (let k = 0; k <= n; k++) {
-        const p = pointOn(s.pts, (len * k) / n);
-        const g = c.createRadialGradient(p.x, p.y, 0, p.x, p.y, radius);
-        g.addColorStop(0, `rgba(255,255,255,${alpha})`);
-        g.addColorStop(0.45, `rgba(255,255,255,${alpha * 0.5})`);
-        g.addColorStop(1, "rgba(255,255,255,0)");
-        c.fillStyle = g;
-        c.beginPath();
-        c.arc(p.x, p.y, radius, 0, Math.PI * 2);
-        c.fill();
-      }
+      // A cached alpha sprite is much cheaper than creating a radial gradient for every
+      // sample point, and it preserves the same additive heat profile.
+      c.globalAlpha = alpha;
+      stampAlong(c, heatSprite, s.pts, s.cum, n, radius);
+      c.globalAlpha = 1;
     });
   }
 
-  function colourise(half, ctx, map, colourAt, maxAlpha, magnitude) {
+  function colourise(half, ctx, map, maxAlpha, magnitude) {
     const c = half.getContext("2d");
     const img = c.getImageData(0, 0, half.width, half.height);
     const d = img.data;
     // normalise against a high percentile, not the maximum: one saturated core would
-    // otherwise flatten every approach street to nothing
-    const sample = [];
-    for (let i = 3; i < d.length; i += 4 * 7) if (d[i]) sample.push(d[i]);
-    if (!sample.length) return;
-    sample.sort((a, b) => a - b);
-    const top = Math.max(28, sample[Math.floor(sample.length * 0.97)]);
+    // otherwise flatten every approach street to nothing. A 256-bin histogram avoids
+    // allocating and sorting a sampled array on every frame.
+    const hist = new Uint32Array(256);
+    let sampled = 0;
+    for (let i = 3; i < d.length; i += 4 * 7) {
+      if (d[i]) { hist[d[i]]++; sampled++; }
+    }
+    if (!sampled) return;
+    let top = 28, seen = 0;
+    const target = Math.ceil(sampled * 0.97);
+    for (let a = 1; a < 256; a++) {
+      seen += hist[a];
+      if (seen >= target) { top = Math.max(28, a); break; }
+    }
     for (let i = 0; i < d.length; i += 4) {
       const a = d[i + 3];
       if (!a) continue;
       const t = Math.min(1, Math.pow(a / top, 0.8));
-      const rgb = colourAt(t);
-      d[i] = rgb[0]; d[i + 1] = rgb[1]; d[i + 2] = rgb[2];
+      const idx = Math.round(t * 255) * 3;
+      d[i] = RAMP_LUT[idx]; d[i + 1] = RAMP_LUT[idx + 1]; d[i + 2] = RAMP_LUT[idx + 2];
       // magnitude keeps a quiet hour quiet: three people should not paint the whole city
       d[i + 3] = Math.min(255, Math.round(t * maxAlpha * (magnitude == null ? 1 : magnitude)));
     }
@@ -331,15 +359,11 @@
     ctx.restore();
   }
 
-  function topDensity(shapes) {
-    return Math.max.apply(null, shapes.map((s) => Math.max(1, s.people) / Math.max(80, lengthOf(s.pts))).concat([1e-6]));
-  }
-
   function drawTrafficHeat(ctx, map, shapes, magnitude) {
     if (!shapes.length) return;
     const half = ensureHalf(map);
-    deposit(half, shapes, topDensity(shapes), map.zoom);
-    colourise(half, ctx, map, rampAt, 235, magnitude);
+    deposit(half, shapes, map.zoom);
+    colourise(half, ctx, map, 235, magnitude);
   }
 
   /* ------------------------------------------------------------- aggregate */
@@ -373,6 +397,19 @@
     return v;
   }
 
+  /* the chosen day's strip runs to 06:00 the next morning: label those starts +1.
+     A missing start is shown as TBA with its documented heat window, never as a
+     published 19:00. */
+  function eventClock(ev) {
+    const flow = S.flows[ev.id] || {};
+    if (ev.timeKnown === false) {
+      return flow.start_window ? `TBA · ${flow.start_window}` : "TBA";
+    }
+    const start = flow.start != null ? flow.start : parseMin(ev.time);
+    if (start == null) return ev.time || "";
+    return clockLabel(start) + (start >= 24 * 60 ? " +1" : "");
+  }
+
   /* each curve entry is a share spread over its slot (15 minutes unless the build says
      otherwise), so a chosen minute can take a fraction of the slot instead of snapping
      to a boundary it never lands on. */
@@ -387,13 +424,25 @@
   }
 
   /* people on a route in the 15 minutes up to `now`: travelling in before the start,
-     or heading home after the estimated end */
+     or heading home after the estimated end. A TBA flow carries several candidate
+     starts, so its curves are averaged instead of pinning the heat to one peak. */
   function enRoute(flow, now, startMin) {
     const mid = Math.max(0, flow.attendance.mid);
-    const arrive = sliceShare(flow.arrival, now - startMin - 15, now - startMin);
+    const starts = (flow.start_options && flow.start_options.length)
+      ? flow.start_options : [startMin];
+    const base = flow.start != null ? flow.start : startMin;
     // old cached flows have no end; they simply count arrivals until the next build
-    let leave = 0;
-    if (flow.end != null) leave = sliceShare(flow.egress, now - flow.end - 15, now - flow.end);
+    const endOffset = flow.end != null ? flow.end - base : null;
+    let arrive = 0, leave = 0;
+    starts.forEach((start) => {
+      arrive += sliceShare(flow.arrival, now - start - 15, now - start);
+      if (endOffset != null) {
+        const end = start + endOffset;
+        leave += sliceShare(flow.egress, now - end - 15, now - end);
+      }
+    });
+    arrive /= starts.length;
+    leave /= starts.length;
     return mid * Math.min(1, arrive + leave);
   }
 
@@ -423,29 +472,66 @@
   }
 
   /* ---------------------------------------------------------- heat layer */
+  function buildShapes(map, legs, total) {
+    const shapes = [];
+    for (const leg of legs) {
+      const route = S.routes[leg.key];
+      if (!route || !route.geometry) continue;
+      const pts = route.geometry.map((pt) => map.project(pt[0], pt[1]));
+      if (pts.length < 2) continue;
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (const p of pts) {
+        if (p.x < minX) minX = p.x;
+        if (p.x > maxX) maxX = p.x;
+        if (p.y < minY) minY = p.y;
+        if (p.y > maxY) maxY = p.y;
+      }
+      const margin = 40;
+      if (maxX < -margin || minX > map.w + margin ||
+          maxY < -margin || minY > map.h + margin) continue;
+      shapes.push({
+        pts, cum: cumulativeLengths(pts), people: Math.max(1, leg.people),
+        share: leg.people / total, name: leg.name,
+      });
+    }
+    return shapes;
+  }
+
   function paintFlow(ctx, map) {
     ctx.fillStyle = "rgba(250,247,241,.34)";
     ctx.fillRect(0, 0, map.w, map.h);
 
     const agg = S.agg || { legs: new Map(), venues: new Map(), people: 0 };
     const legs = [...agg.legs.values()].sort((a, b) => b.people - a.people);
-    if (!legs.length) { paintEventDots(ctx, map); return; }
+    if (!legs.length) { S.shapes = []; paintEventDots(ctx, map); return; }
     const total = legs.reduce((sum, l) => sum + l.people, 0) || 1;
-    const P = (lat, lon) => map.project(lat, lon);
-    const shapes = legs.map((leg) => ({
-      pts: S.routes[leg.key].geometry.map((pt) => P(pt[0], pt[1])),
-      people: Math.max(1, leg.people), share: leg.people / total, mode: leg.mode, name: leg.name,
-    })).filter((s) => s.pts.length > 1);
+    const viewKey = `${map._z}|${map._scale}|${map._ox}|${map._oy}|${map.w}|${map.h}`;
+    const heatKey = `${S.aggVersion}|${viewKey}`;
 
-    // a touch more presence: quiet hours stay faint, busy ones fill the streets
-    const magnitude = Math.min(1, Math.max(0.14, Math.log10(total + 1) / 3.1));
-    drawTrafficHeat(ctx, map, shapes, magnitude);
+    // One cache for the current aggregate and viewport. A hover or tile repaint
+    // reuses both the heat bitmap and the projected shapes; a time, day or map
+    // move rebuilds them together.
+    if (S.heatKey !== heatKey) {
+      S.shapes = buildShapes(map, legs, total);
+      if (!S.heatLayer) S.heatLayer = document.createElement("canvas");
+      const w = Math.max(1, Math.round(map.w)), h = Math.max(1, Math.round(map.h));
+      if (S.heatLayer.width !== w || S.heatLayer.height !== h) {
+        S.heatLayer.width = w; S.heatLayer.height = h;
+      }
+      const layer = S.heatLayer.getContext("2d");
+      layer.clearRect(0, 0, w, h);
+      // a touch more presence: quiet hours stay faint, busy ones fill the streets
+      const magnitude = Math.min(1, Math.max(0.14, Math.log10(total + 1) / 3.1));
+      drawTrafficHeat(layer, map, S.shapes, magnitude);
+      S.heatKey = heatKey;
+    }
+    ctx.drawImage(S.heatLayer, 0, 0, map.w, map.h);
 
     // the venues people are heading to, sized by how many are on their way
     [...agg.venues.entries()].sort((a, b) => b[1] - a[1]).forEach(([id, people]) => {
       const v = S.venues[id];
       if (!v) return;
-      const p = P(v.lat, v.lon);
+      const p = map.project(v.lat, v.lon);
       const r = Math.max(4, Math.min(13, Math.sqrt(people) / 9));
       ctx.beginPath(); ctx.arc(p.x, p.y, r + 3, 0, Math.PI * 2);
       ctx.fillStyle = "rgba(255,255,255,.95)"; ctx.fill();
@@ -455,7 +541,7 @@
 
     // district names only: the map answers where, not which gig
     const placed = [];
-    shapes.sort((a, b) => b.share - a.share).slice(0, MOBILE ? 4 : 6).forEach((s) => {
+    S.shapes.sort((a, b) => b.share - a.share).slice(0, MOBILE ? 4 : 6).forEach((s) => {
       const p = s.pts[0];
       const text = s.name;
       ctx.font = "600 10px 'IBM Plex Mono', monospace";
@@ -507,12 +593,12 @@
     return ({ gigs: "Gig", sports: "Sports", student: "Student party", stage: "Stage", culture: "Culture", community: "Community" })[cat] || "Event";
   }
 
-  function showTipAt(x, y) {
+  function showTipAt(x, y, knownHit) {
     const tip = $("eventTip");
     if (!tip) return;
-    const hit = S.dotHits.find((h) => Math.hypot(h.x - x, h.y - y) < 16);
+    const hit = knownHit || S.dotHits.find((h) => Math.hypot(h.x - x, h.y - y) < 16);
     if (!hit) { tip.hidden = true; return; }
-    tip.innerHTML = `<b>${esc(hit.ev.time)} · ${esc(hit.ev.title)}</b>` +
+    tip.innerHTML = `<b>${esc(eventClock(hit.ev))} · ${esc(hit.ev.title)}</b>` +
       `<span>${esc(hit.venue.name)} · ${categoryLabel(hit.ev.category)}${hit.ev.seed ? " · sample" : ""}</span>`;
     tip.hidden = false;
     const wrap = $("mapWrap").getBoundingClientRect();
@@ -520,7 +606,6 @@
     tip.style.width = w + "px";
     tip.style.left = Math.max(8, Math.min(wrap.width - w - 8, x - w / 2)) + "px";
     tip.style.top = Math.max(8, y - tip.offsetHeight - 12) + "px";
-    S.tipOpen = true;
   }
 
   /* ------------------------------------------------------------ estimate */
@@ -545,6 +630,7 @@
 
   function refresh() {
     S.agg = aggregate();
+    S.aggVersion += 1;
     if (S.map) S.map.schedule();
     renderEstimate();
   }
@@ -575,17 +661,14 @@
     S.events = events || [];
     wire();
     try {
-      const [flows, venues, zones, routes] = await Promise.all([
+      const [flows, venues, routes] = await Promise.all([
         fetch("./geo/flows.json").then((r) => r.json()),
         fetch("./geo/venues.json").then((r) => r.json()),
-        fetch("./geo/zones.json").then((r) => r.json()),
         fetch("./geo/routes.json").then((r) => r.json()).catch(() => ({ routes: {} }))
       ]);
       S.routes = routes.routes || {};
       (flows.events || []).forEach((f) => { S.flows[f.id] = f; });
       (venues.venues || []).forEach((v) => { S.venues[v.id] = v; });
-      S.zoneMeta = {};
-      (zones.zones || []).forEach((z) => { S.zoneMeta[z.id] = z; });
     } catch (err) {
       console.error("flow data failed", err);
     }
@@ -596,7 +679,7 @@
       const r = $("mapCanvas").getBoundingClientRect();
       const mx = e.clientX - r.left, my = e.clientY - r.top;
       const hit = S.map.hitAt(mx, my);
-      showTipAt(mx, my);
+      showTipAt(mx, my, hit);
       // tapping a dot names it in the panel too, for phones without hover
       const id = hit ? hit.ev.id : null;
       if (id !== S.hoverId) { S.hoverId = id; if (S.onHover) S.onHover(id); S.map.schedule(); }
@@ -617,17 +700,23 @@
     onHover(cb) { S.onHover = cb; },
     currentDay() { return S.day; },
     now() { return S.minutes; },
+    venue(id) { return S.venues[id] || null; },
     /* every event on the chosen day, with the minutes the map uses */
     dayEvents() {
       return S.events.filter((ev) => ev.date === S.day).map((ev) => {
         const f = S.flows[ev.id] || {};
         const v = S.venues[f.venue_id] || {};
         return {
-          id: ev.id, time: ev.time, title: ev.title, category: ev.category, venueId: f.venue_id,
+          id: ev.id, time: eventClock(ev), timeKnown: ev.timeKnown !== false,
+          title: ev.title, category: ev.category, sub: ev.sub, venueId: f.venue_id,
           venue: (v.name && f.venue_id !== "tampere_muu") ? v.name : (v.name || ev.venue || ""),
-          start: f.start == null ? null : f.start,
+          // a TBA row has no precise start to mark "occurring now" against
+          start: ev.timeKnown === false || f.start == null ? null : f.start,
           end: f.end == null ? null : f.end,
           mid: f.attendance ? f.attendance.mid : null,
+          attendance: f.attendance || null,
+          interest: f.interest || null,
+          basis: f.basis || null,
           seed: !!ev.seed,
         };
       }).sort((a, b) => (a.start == null ? 1e9 : a.start) - (b.start == null ? 1e9 : b.start));
@@ -653,6 +742,12 @@
       if (S.hideTip) S.hideTip();
       S.minutes = min;
       refresh();
+    },
+    /* test/debug hook: one event's estimated people on a route at a minute */
+    eventPeople(id, minute) {
+      const flow = S.flows[id];
+      if (!flow) return 0;
+      return enRoute(flow, minute, flow.start != null ? flow.start : 19 * 60);
     },
     clockLabel,
     dayLabel

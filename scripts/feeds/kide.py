@@ -17,7 +17,6 @@ from zoneinfo import ZoneInfo
 URL = "https://api.kide.app/api/products?city=Tampere"
 DETAIL_URL = "https://api.kide.app/api/products/{id}"
 TZ = ZoneInfo("Europe/Helsinki")
-MAX_EVENTS = 80          # keep one build bounded; the daily refresh picks up the rest
 SKIP_WORDS = ("jäsenyys", "membership", "kausikortti", "season card", "lahjakortti",
               "gift card", " Lippu", "lippupaketti")
 
@@ -33,7 +32,7 @@ def fetch():
     except Exception as exc:  # noqa: BLE001 - a broken source must not blank the site
         return [], f"FAILED: {exc}"
 
-    today = dt.date.today()
+    today = dt.datetime.now(TZ).date()
     out, seen = [], set()
     for p in products:
         try:
@@ -48,8 +47,10 @@ def fetch():
             if not title or any(w.lower() in title.lower() for w in SKIP_WORDS):
                 continue
             minutes = round((ends - starts).total_seconds() / 60) if ends else 0
-            if minutes < 30:
-                # no trustworthy end: let the model fall back to its typical duration
+            if minutes < 30 or minutes > 24 * 60:
+                # No trustworthy single-event end: a multi-day booking or an end date
+                # entered on the wrong day. Let the model use its typical duration
+                # instead of drawing an egress days after the start.
                 minutes = 0
             # one product per organiser: four clubs selling the same jam are one event, even when
             # each spells the campus differently ("TAMK C3 Game Studio", "TAMK Games Academy", …)
@@ -70,8 +71,6 @@ def fetch():
             })
         except (ValueError, TypeError, KeyError, AttributeError):
             continue  # one malformed product must not lose the whole source
-        if len(out) >= MAX_EVENTS:
-            break
     return out, "OK"
 
 

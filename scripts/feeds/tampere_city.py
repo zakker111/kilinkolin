@@ -24,7 +24,6 @@ from zoneinfo import ZoneInfo
 URL = "https://tapahtumat.tampere.fi/api/search/internal-content-fetch?lang=fi&country=FI&q="
 UA = "kilinkolin/0.12 (+https://github.com/zakker111/kilinkolin)"
 TZ = ZoneInfo("Europe/Helsinki")
-MAX_EVENTS = 220          # one build stays bounded; the daily refresh picks up the rest
 
 STAGE_CATS = {"theatre", "dance", "comedy", "circus", "opera", "performances", "musical"}
 CULTURE_CATS = {"museums", "museums and galleries", "exhibitions", "literature", "film",
@@ -44,7 +43,7 @@ def fetch():
     except Exception as exc:  # noqa: BLE001 - a broken source must not blank the site
         return [], f"FAILED: {exc}"
 
-    today = dt.date.today()
+    today = dt.datetime.now(TZ).date()
     out = []
     for page in pages:
         if page.get("pageType") != "event":
@@ -56,7 +55,6 @@ def fetch():
         if item:
             out.extend(item)
     out.sort(key=lambda e: (e["date"], e["time"]))
-    del out[MAX_EVENTS:]
     return out, ("OK" if out else "EMPTY")
 
 
