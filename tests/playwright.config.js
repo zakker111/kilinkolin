@@ -2,6 +2,7 @@ import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
   testDir: ".",
+  testIgnore: "**/live.spec.js",
   fullyParallel: false,
   workers: 1,
   reporter: process.env.CI ? "line" : "list",

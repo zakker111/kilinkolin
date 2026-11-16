@@ -2,7 +2,8 @@
   "name": "kilinkolin-smoke",
   "private": true,
   "scripts": {
-    "test": "python3 -m unittest test_model && playwright test"
+    "test": "python3 -m unittest test_model test_ci_checks && playwright test",
+    "test:live": "playwright test --config=playwright.live.config.js"
   },
   "devDependencies": {
     "@playwright/test": "1.65.1"
