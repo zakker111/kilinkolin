@@ -20,7 +20,7 @@ Not a fork of Tampere Keikat — it reads that project's published feed. See `NO
 
 `APP_VERSION` lives in `web/config.js`. Every release also gets a top entry in `VERSIONS.md`, a
 line in `README.md` and a note in `TODO.md`; keep those in step when the site changes.
-`MODEL_VERSION` (currently 2026.11.5) lives in `scripts/build.py` and `web/config.js` and changes
+`MODEL_VERSION` (currently 2026.11.6) lives in `scripts/build.py` and `web/config.js` and changes
 only when the model does.
 
 ## Hard rules

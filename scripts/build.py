@@ -29,7 +29,7 @@ WEB = os.path.join(ROOT, "web")
 GEO = os.path.join(WEB, "geo")
 
 KEIKAT_URL = "https://zakker111.github.io/tampere-keikat/data.json"
-MODEL_VERSION = "2026.11.5"
+MODEL_VERSION = "2026.11.6"
 SCHEMA_VERSION = 2
 TZ = ZoneInfo("Europe/Helsinki")
 
@@ -88,16 +88,30 @@ def log(*a):
 
 
 def clock_minutes(s):
-    """Same convention as the page: 02:00–05:59 belongs to the previous night."""
-
-def clock_minutes(s):
-    """Same convention as the page: 02:00–05:59 belongs to the previous night."""
+    """Same convention as the page: a start before 06:00 belongs to the previous night."""
     try:
         h, m = (int(x) for x in (s or "19:00").split(":"))
     except (TypeError, ValueError):
         return 19 * 60
     v = h * 60 + m
     return v + 24 * 60 if v < 6 * 60 else v
+
+
+def clean_feed_time(date_s, time_s):
+    """Discard a time that is really the event's day and month.
+
+    The upstream music feed sometimes writes a missing start as ``DD:MM`` for the
+    event date (2026-12-05 -> 05:12, 2026-11-21 -> 21:11). Those are not published
+    start times and two of them would also move the event to the previous day via
+    ``night_date``. Treat them like any other omitted start instead of inventing one.
+    """
+    if not time_s:
+        return time_s
+    try:
+        day = dt.date.fromisoformat(date_s)
+    except (TypeError, ValueError):
+        return time_s
+    return "" if time_s == f"{day.day:02d}:{day.month:02d}" else time_s
 
 
 def night_date(date_s, time_s):
@@ -219,9 +233,15 @@ def resolve_venue(raw, alias_idx, venues):
     head = low.split(",")[0].strip()
     if head in alias_idx:
         return next(v for v in venues if v["id"] == alias_idx[head])
-    for key, vid in alias_idx.items():
-        if len(key) > 4 and key in low:
-            return next(v for v in venues if v["id"] == vid)
+    # A substring match is a fallback, not a license for a short generic alias to
+    # win. "Hatanpään valtatie 1 / Lush Koskikeskus, 00100 Tampere" must resolve to
+    # Koskikeskus, not to the city-wide "Tampere" fallback or the first venue that
+    # happens to share the street address.
+    matches = [(len(key), key, vid) for key, vid in alias_idx.items()
+               if vid != "tampere_muu" and len(key) > 4 and key in low]
+    if matches:
+        _, _, vid = max(matches)
+        return next(v for v in venues if v["id"] == vid)
     return None
 
 
@@ -319,7 +339,8 @@ def interest_score(ev, cap, category, sub, venue):
     if hour is not None:
         if 18 <= hour <= 22:
             score += 7; signals.append(("prime start time", 7))
-        elif hour < 15:
+        elif 6 <= hour < 15:
+            # a 00:30 start is a late-night event, not a daytime one
             score -= 5; signals.append(("daytime start", -5))
     if ev.get("free"):
         score += 3; signals.append(("free entry", 3))
@@ -675,6 +696,12 @@ def kide_detail_venue(ev, detail):
     postal = " ".join((detail.get("postalCode") or "").split())
     city = " ".join((detail.get("city") or "").split())
     address = street + (", " + " ".join(p for p in (postal, city) if p) if postal or city else "")
+    # Prefer a venue name that the detail address actually contains. A bare address
+    # match is ambiguous in a shared building: "Hatanpään valtatie 1 / Lush
+    # Koskikeskus" must not become Ilves Bar & Night just because both are at number 1.
+    existing = resolve_venue(address, build_alias_index(VENUES), VENUES)
+    if existing and existing["id"] != "tampere_muu":
+        return existing
     existing = resolve_by_address(address, VENUES)
     if existing and existing["id"] != "tampere_muu":
         return existing
@@ -751,11 +778,16 @@ def build(mode="full", with_samples=False):
 
     events = []
     unmatched = Counter()
+    leaked_times = 0
 
     for row in feed.get("events", []):
         if len(row) < 7:
             continue
         date, time_s, title, venue_raw, genre, free, url = row[:7]
+        cleaned = clean_feed_time(date, time_s)
+        if time_s and not cleaned:
+            leaked_times += 1
+        time_s = cleaned
         venue = resolve_venue(venue_raw, alias_idx, VENUES)
         if not venue or venue["id"] == "tampere_muu":
             # a real street address in the row beats the generic fallback venue
@@ -794,17 +826,21 @@ def build(mode="full", with_samples=False):
 
     # Theatre, culture and community rows from the city calendar. Each one carries its own
     # published coordinates, so an unregistered place becomes a real venue instead of a fallback.
-    seen_titles = {(e["date"], norm_title(e["title"])) for e in events}
+    # Include the start time: a theatre can perform the same title twice in one day,
+    # and those are two real arrival peaks rather than a duplicate row.
+    seen_titles = {(e["date"], e["time"] or "19:00", norm_title(e["title"])) for e in events}
     city_kept, city_dup, city_new = 0, 0, 0
     for item in city_items:
-        key = (item["date"], norm_title(item["title"]))
+        key = (item["date"], item["time"], norm_title(item["title"]))
         if key in seen_titles:
             city_dup += 1
             continue
         venue = resolve_venue(item["place"], alias_idx, VENUES) or resolve_by_address(item["place"], VENUES)
         if not venue or venue["id"] == "tampere_muu":
+            before = len(VENUES)
             venue = place_venue(item)
-            city_new += 1
+            if len(VENUES) > before:
+                city_new += 1
         category, sub3 = classify(item["kind"], item["sub"], None, item["title"])
         start_min = clock_minutes(item["time"])
         end_min = start_min + item["minutes"] if item["minutes"] else None
@@ -819,11 +855,13 @@ def build(mode="full", with_samples=False):
             "max_participants": int(item.get("max_participants") or 0),
         })
     if city_items:
-        log(f"[city] {city_kept} events placed ({city_new} on a new calendar location), "
-            f"{city_dup} duplicates of another source skipped")
+        log(f"[city] {city_kept} events placed ({city_new} new calendar venue(s)), "
+            f"{city_dup} duplicate row(s) skipped")
 
     if unmatched:
         log(f"[venues] unresolved strings mapped to fallback: {dict(unmatched)}")
+    if leaked_times:
+        log(f"[music] {leaked_times} start time(s) repeated the event date; treated as missing")
 
     # The UI's day strip runs 06:00–06:00, so an 00:30 start belongs to the previous
     # strip. Do this before the date filter; an after-midnight event earlier today is

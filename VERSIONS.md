@@ -2,6 +2,30 @@
 
 ## App
 
+### 0.13.5 — 2026-11-16
+Fix malformed source times, repeated showings, and overlong student events.
+
+- Fixed: the music feed writes the event's day and month into the time field when a start is
+  missing (`2026-12-05` -> `05:12`, `2026-11-21` -> `21:11`). The build now treats those 16
+  values as missing starts, so they use the documented 19:00 fallback and stay on their
+  published date instead of moving to the previous night.
+- Fixed: city-calendar dedupe keyed only on date and title, dropping five legitimate repeat
+  performances (for example a 13:00 and an 18:00 show). The key now includes the start time.
+- Fixed: Kide multi-day bookings produced egress windows of 24–107 hours. An end more than 24
+  hours after the start is no longer trusted; the event keeps its start and uses the model's
+  typical duration.
+- Fixed: venue matching preferred a short generic alias (`Tampere`) and a shared street address
+  over the venue named in the address. `Lush pikkujoulut Koskikeskuksessa` no longer appears at
+  Ilves Bar & Night.
+- Fixed: after-midnight starts in the panel and map tooltip now show `+1` (and a 24-hour
+  event's end `+2`), matching the hour slider.
+- Added validation for malformed times, date-as-time values, start/time consistency, an empty
+  route cache, and events longer than 24 hours. The 06:00 boundary is no longer warned as a
+  suspicious time.
+- Verified: 595 events, 154 venues, 4,031 cached legs (19,763 km), 0 corridor fallbacks, 0
+  missing route keys, 0 validator errors/warnings; 3 Playwright smoke tests pass.
+- Model 2026.11.6: after-midnight starts are no longer scored as daytime events; schema 2.
+
 ### 0.13.4 — 2026-11-15
 Publish every future event, not just the first page of a sorted feed.
 

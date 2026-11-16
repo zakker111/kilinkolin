@@ -65,7 +65,7 @@
     strip.innerHTML = days.map((day) => {
       const p = day.split("-");
       const d = new Date(+p[0], +p[1] - 1, +p[2]);
-      return `<button class="day" data-day="${day}" type="button">` +
+      return `<button class="day" data-day="${esc(day)}" type="button">` +
         `<span class="day-dow">${DOW[d.getDay()]}</span>` +
         `<span class="day-num">${d.getDate()}</span>` +
         `<span class="day-mon">${MONTHS[d.getMonth()]}</span></button>`;
@@ -110,6 +110,11 @@
 
   /* ------------------------------------------------------- right-hand panel
      What is on today, and the details of the dot under the pointer. */
+  function clockWithDay(min) {
+    const day = Math.floor(min / (24 * 60));
+    return window.KMap.clockLabel(min) + (day ? ` +${day}` : "");
+  }
+
   function renderDetail(id) {
     const box = $("panelDetail");
     if (!box) return;
@@ -119,7 +124,7 @@
       box.innerHTML = `<span class="pd-hint">${IS_MOBILE ? "Tap a dot on the map, or a row below, for that event." : "Hover a dot on the map, or a row below, for that event."}</span>`;
       return;
     }
-    const end = ev.end != null ? "–" + window.KMap.clockLabel(ev.end) + (ev.end >= 24 * 60 ? " +1" : "") : "";
+    const end = ev.end != null ? "–" + clockWithDay(ev.end) : "";
     box.className = "panel-detail on";
     box.innerHTML =
       `<div class="pd-title">${esc(ev.title)}</div>` +

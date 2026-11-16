@@ -47,8 +47,10 @@ def fetch():
             if not title or any(w.lower() in title.lower() for w in SKIP_WORDS):
                 continue
             minutes = round((ends - starts).total_seconds() / 60) if ends else 0
-            if minutes < 30:
-                # no trustworthy end: let the model fall back to its typical duration
+            if minutes < 30 or minutes > 24 * 60:
+                # No trustworthy single-event end: a multi-day booking or an end date
+                # entered on the wrong day. Let the model use its typical duration
+                # instead of drawing an egress days after the start.
                 minutes = 0
             # one product per organiser: four clubs selling the same jam are one event, even when
             # each spells the campus differently ("TAMK C3 Game Studio", "TAMK Games Academy", …)

@@ -373,6 +373,14 @@
     return v;
   }
 
+  /* the chosen day's strip runs to 06:00 the next morning: label those starts +1 */
+  function eventClock(ev) {
+    const flow = S.flows[ev.id] || {};
+    const start = flow.start != null ? flow.start : parseMin(ev.time);
+    if (start == null) return ev.time || "";
+    return clockLabel(start) + (start >= 24 * 60 ? " +1" : "");
+  }
+
   /* each curve entry is a share spread over its slot (15 minutes unless the build says
      otherwise), so a chosen minute can take a fraction of the slot instead of snapping
      to a boundary it never lands on. */
@@ -512,7 +520,7 @@
     if (!tip) return;
     const hit = S.dotHits.find((h) => Math.hypot(h.x - x, h.y - y) < 16);
     if (!hit) { tip.hidden = true; return; }
-    tip.innerHTML = `<b>${esc(hit.ev.time)} · ${esc(hit.ev.title)}</b>` +
+    tip.innerHTML = `<b>${esc(eventClock(hit.ev))} · ${esc(hit.ev.title)}</b>` +
       `<span>${esc(hit.venue.name)} · ${categoryLabel(hit.ev.category)}${hit.ev.seed ? " · sample" : ""}</span>`;
     tip.hidden = false;
     const wrap = $("mapWrap").getBoundingClientRect();
@@ -623,7 +631,7 @@
         const f = S.flows[ev.id] || {};
         const v = S.venues[f.venue_id] || {};
         return {
-          id: ev.id, time: ev.time, title: ev.title, category: ev.category, venueId: f.venue_id,
+          id: ev.id, time: eventClock(ev), title: ev.title, category: ev.category, venueId: f.venue_id,
           venue: (v.name && f.venue_id !== "tampere_muu") ? v.name : (v.name || ev.venue || ""),
           start: f.start == null ? null : f.start,
           end: f.end == null ? null : f.end,

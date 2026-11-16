@@ -52,6 +52,11 @@
       or a flow without a matching event/venue.
 - [x] 0.13.4 after-midnight dates: a start before 06:00 now belongs to the previous 06:00–06:00
       day strip, so midnight events are no longer drawn one day late.
+- [x] 0.13.5 audit fixes: date-leaked music times (`05:12`) become missing starts; repeat city
+      performances keep their separate times; Kide multi-day ends no longer create 24–107 hour
+      egress windows; shared-address venue matching no longer puts Lush Koskikeskus at Ilves Bar
+      & Night; after-midnight labels show `+1`/`+2`; validator covers malformed times, empty
+      route caches and over-24-hour events.
 - [x] Sports adapter: Liiga public game list, Ilves/Tappara home games at Nokia Arena
 - [x] Feed end times: the Liiga adapter passes the playing time when a game carries one, so the
       hockey egress curve uses a real end instead of the 150-minute default

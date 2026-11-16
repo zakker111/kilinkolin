@@ -3,6 +3,7 @@
 import datetime as dt
 import json
 import os
+import re
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -13,6 +14,16 @@ errors, warnings = [], []
 def load(path):
     with open(path, encoding="utf-8") as f:
         return json.load(f)
+
+
+def clock_minutes(s):
+    """The page's 06:00–06:00 convention for a start time."""
+    try:
+        h, m = (int(x) for x in (s or "19:00").split(":"))
+    except (TypeError, ValueError):
+        return 19 * 60
+    v = h * 60 + m
+    return v + 24 * 60 if v < 6 * 60 else v
 
 
 def main():
@@ -49,10 +60,15 @@ def main():
             continue
         if str(state).startswith("FAILED"):
             errors.append(f"source {source} failed: {state}")
+        elif state == "EMPTY" and source in ("student", "culture"):
+            # These feeds always have future events. An empty result would silently
+            # remove a whole category; keep the last good deployment instead.
+            errors.append(f"source {source} returned no events")
         elif state == "CACHED":
             warnings.append(f"source {source} used its cached copy")
 
     seen_ids = set()
+    event_rows = {}
     cats = {}
     for i, row in enumerate(events):
         if len(row) < 15:
@@ -64,6 +80,7 @@ def main():
         if eid in seen_ids:
             errors.append(f"duplicate event id {eid}")
         seen_ids.add(eid)
+        event_rows[eid] = row
         try:
             dt.date.fromisoformat(date)
         except ValueError:
@@ -76,14 +93,21 @@ def main():
                 errors.append(f"row {i} venue {venue_id!r} has no street address")
         if not title or not venue:
             errors.append(f"row {i} missing title or venue")
-        if time_s and ":" in time_s:
-            hh = int(time_s.split(":")[0])
-            if 2 <= hh <= 6:
-                warnings.append(f"row {i} starts at {time_s} — possible timezone bug ({title[:40]!r})")
+        if time_s:
+            if not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", time_s):
+                errors.append(f"row {i} has bad time {time_s!r}")
+            elif len(date) == 10 and time_s == f"{date[8:10]}:{date[5:7]}":
+                errors.append(f"row {i} time {time_s} is the event date, not a start time")
+            else:
+                hh = int(time_s[:2])
+                if 2 <= hh < 6:
+                    warnings.append(f"row {i} starts at {time_s} — possible timezone bug ({title[:40]!r})")
 
     f_events = flows.get("events", [])
     if len(f_events) != len(events):
         errors.append(f"flows has {len(f_events)} events but data has {len(events)}")
+    if not routes and any(f.get("legs") for f in f_events):
+        errors.append("routes.json has no cached routes but flows contain street legs")
     corridor_flows = [f.get("id") for f in f_events if f.get("corridors")]
     if corridor_flows:
         warnings.append(f"{len(corridor_flows)} flow(s) still use straight-line fallback corridors")
@@ -106,10 +130,18 @@ def main():
         e_sum = round(sum(s["share"] for s in f.get("egress", [])), 2)
         if f.get("egress") and not 0.98 <= e_sum <= 1.02:
             errors.append(f"event {f.get('id')} egress shares sum to {e_sum}")
+        event = event_rows.get(f.get("id"))
         if f.get("start") is None:
             errors.append(f"event {f.get('id')} has no start minute")
-        elif f.get("end") is not None and f["end"] <= f["start"]:
-            errors.append(f"event {f.get('id')} ends before it starts ({f.get('start')}–{f.get('end')})")
+        elif event is not None:
+            expected = clock_minutes(event[1]) if event[1] else 19 * 60
+            if f["start"] != expected:
+                errors.append(f"event {f.get('id')} start {f['start']} != published time {event[1]!r} ({expected})")
+        if f.get("start") is not None and f.get("end") is not None:
+            if f["end"] <= f["start"]:
+                errors.append(f"event {f.get('id')} ends before it starts ({f.get('start')}–{f.get('end')})")
+            elif f["end"] - f["start"] > 24 * 60:
+                errors.append(f"event {f.get('id')} lasts more than 24 hours ({f.get('start')}–{f.get('end')})")
         z_sum = sum(z["share"] for z in f.get("zones", []))
         if z_sum > 1.001:
             errors.append(f"event {f.get('id')} zone shares exceed 1 ({z_sum:.3f})")

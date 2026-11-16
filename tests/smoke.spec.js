@@ -83,9 +83,9 @@ test.describe("Kilinkolin smoke", () => {
     await page.mouse.click(box.x + hit.x, box.y + hit.y);
 
     await expect(page.locator("#eventTip")).toBeVisible();
-    const shown = await page.locator("#eventTip b").innerText();
+    const shown = (await page.locator("#eventTip b").textContent()) || "";
     const title = shown.split(" · ").slice(1).join(" · ");
     expect(title).not.toBe("");
-    await expect(page.locator("#panelDetail .pd-title")).toHaveText(title);
+    expect((await page.locator("#panelDetail .pd-title").textContent()) || "").toBe(title);
   });
 });
