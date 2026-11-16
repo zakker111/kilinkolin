@@ -1,0 +1,92 @@
+name: Pull request checks
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "scripts/**"
+      - "registry/**"
+      - "data/seed_events.json"
+      - "web/**"
+      - "tests/**"
+      - ".github/workflows/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kilinkolin-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build, route-check and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Save previous published data
+        run: |
+          if [ -f web/data.json ]; then
+            cp web/data.json "$RUNNER_TEMP/previous-data.json"
+          fi
+          if [ -f web/geo/flows.json ]; then
+            cp web/geo/flows.json "$RUNNER_TEMP/previous-flows.json"
+          fi
+
+      - name: Build data
+        env:
+          DIGITRANSIT_API_KEY: ${{ secrets.DIGITRANSIT_API_KEY }}
+        run: python3 scripts/build.py --city tampere --mode full
+
+      # Keep the route-fetch diagnostics non-fatal here; the coverage gate below
+      # is what makes a routing failure visible.
+      - name: Fetch missing street routes
+        continue-on-error: true
+        run: |
+          python3 scripts/routes.py --from-flow --max 300
+          python3 scripts/routes.py --max 1500
+
+      - name: Rebuild with the new routes
+        run: python3 scripts/build.py --city tampere --mode full
+
+      - name: Check route coverage
+        run: |
+          python3 scripts/check_route_coverage.py \
+            --flows web/geo/flows.json \
+            --routes web/geo/routes.json \
+            --previous "$RUNNER_TEMP/previous-flows.json"
+
+      # Pull requests get the churn report but do not fail on live-feed churn;
+      # the main deployment workflow makes this check blocking.
+      - name: Report data churn
+        run: |
+          python3 scripts/check_data_churn.py \
+            --previous "$RUNNER_TEMP/previous-data.json" \
+            --current web/data.json \
+            --allow-drop
+
+      - name: Validate
+        run: python3 scripts/validate.py
+
+      - name: Install smoke-test dependencies
+        working-directory: tests
+        run: npm ci
+
+      - name: Install Chromium for smoke test
+        working-directory: tests
+        run: npx playwright install --with-deps chromium
+
+      - name: Run browser smoke test
+        working-directory: tests
+        run: npm test
