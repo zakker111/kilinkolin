@@ -2,6 +2,42 @@
 
 ## App
 
+### 0.16.3 — 2026-11-16
+Load only the selected day and keep heat rendering off the main thread.
+
+- Changed: `build.py` now writes `web/geo/days/<date>.json` bundles containing the day's flows
+  and the union of routes they use. The browser lazy-loads only the selected day and falls back
+  to the full `flows.json` + `routes.json` pair if a bundle is missing. All 127 bundles total
+  9.6 MB; the largest (26-event day) is 409 KB vs the 4.2 MB full pair. The full files remain for
+  validation and the route/data gates.
+- Changed: heat rasterisation moved to `web/heat-worker.js` on an OffscreenCanvas. The main
+  thread keeps the existing synchronous renderer as a fallback when workers or OffscreenCanvas
+  are unavailable; stale worker results are discarded by request id.
+- Changed: during drag, wheel and zoom animation the map uses a lower internal DPR, then restores
+  full quality after 160 ms idle. The hour scrubber samples heat at 0.55 quality and restores full
+  quality after the same delay. Long OSM traces are decimated only for the heat.
+- Changed: the basemap is composed into a cached tile canvas, so pan and heat repaints do not
+  redraw every raster tile. The day event list is cached per refresh.
+- Changed: Bebas Neue, IBM Plex Mono and Inter Latin WOFF2 subsets are self-hosted under
+  `web/fonts/` and preloaded; the page no longer opens a Google Fonts connection.
+- Verified: 25 Python and 14 Playwright tests pass. On the busiest 26-event day at 1280×900,
+  DPR 2, Chromium reports 58.2 fps for a 600 px pan (p95 16.8 ms) and 60.0 fps for continuous
+  hour scrubbing, with the worker path active and no console errors. A cached pan and a forced
+  fresh rerasterisation at the same camera were pixel-identical, and the zoom/pan screenshots
+  showed no clipped heat edge or district-label drift.
+
+### 0.16.2 — 2026-11-16
+Keep map panning smooth on busy days.
+
+- Changed: heat is rasterised into a padded bitmap. A pan crops the correct region from that
+  bitmap, and the zoom animation scales it, instead of restamping every street on every frame.
+  A fresh raster happens only after a large camera move, a zoom settles, or the day/hour changes.
+- Fixed: district labels choose from candidates inside the current viewport, so routes kept in
+  the padding do not push visible labels offscreen.
+- Verified: 25 Python and 14 Playwright tests pass. Chromium 1280×900 at DPR 2 on the busiest
+  26-event day: pan improved from 25.3 to 59.7 fps (p95 99.9 ms to 16.7 ms); the zoom preview
+  runs at 47.6 fps instead of 32.8 fps.
+
 ### 0.16.1 — 2026-11-16
 Simplify the heat cache and remove the visual artifacts from the performance pass.
 

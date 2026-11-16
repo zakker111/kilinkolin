@@ -121,6 +121,19 @@ test.describe("Kilinkolin smoke", () => {
     expect(missing.window).toBe("18:00–20:00");
 
     await page.locator(`.day[data-day="${missing.date}"]`).click();
+    await page.waitForFunction((day) => window.KMap.currentDay() === day, missing.date);
+    const spread = await page.evaluate(async (id) => {
+      const flows = await fetch("./geo/flows.json").then((r) => r.json());
+      const flow = (flows.events || []).find((item) => item.id === id);
+      return flow ? {
+        mid: flow.attendance.mid,
+        values: [18 * 60, 19 * 60, 20 * 60].map((minute) => window.KMap.eventPeople(id, minute)),
+      } : null;
+    }, missing.id);
+    expect(spread).not.toBeNull();
+    expect(spread.values.every((value) => value > 0)).toBe(true);
+    expect(spread.values[1]).toBeLessThan(spread.mid);
+
     const row = page.locator(`#panelList .panelRow[data-id="${missing.id}"]`);
     await expect(row).toBeVisible();
     await expect(row.locator(".pr-time")).toHaveText("TBA");
@@ -130,17 +143,24 @@ test.describe("Kilinkolin smoke", () => {
   });
 
   test("a TBA event's heat is spread across its documented window", async ({ page }) => {
-    const spread = await page.evaluate(async () => {
-      const flows = await fetch("./geo/flows.json").then((r) => r.json());
-      const flow = (flows.events || []).find((item) =>
-        item.start_options && item.start_options.length > 1 && item.attendance.mid > 0);
-      if (!flow) return null;
-      const at = (minute) => window.KMap.eventPeople(flow.id, minute);
-      return { mid: flow.attendance.mid, values: [at(18 * 60), at(19 * 60), at(20 * 60)] };
+    // Redundant with the spread assertion in the TBA label test; kept as a
+    // focused regression once the day's flow has been loaded.
+    const target = await page.evaluate(async () => {
+      const [data, flows] = await Promise.all([
+        fetch("./data.json").then((r) => r.json()),
+        fetch("./geo/flows.json").then((r) => r.json()),
+      ]);
+      const row = (data.events || []).find((event) => !event[1]);
+      const flow = row && (flows.events || []).find((item) => item.id === row[7]);
+      return row && flow ? { date: row[0], id: flow.id, mid: flow.attendance.mid } : null;
     });
-    expect(spread, "the build should publish a TBA flow with demand").not.toBeNull();
-    expect(spread.values.every((value) => value > 0)).toBe(true);
-    expect(spread.values[1]).toBeLessThan(spread.mid);
+    expect(target).not.toBeNull();
+    await page.locator(`.day[data-day="${target.date}"]`).click();
+    await page.waitForFunction((day) => window.KMap.currentDay() === day, target.date);
+    const values = await page.evaluate((id) => [18 * 60, 19 * 60, 20 * 60]
+      .map((minute) => window.KMap.eventPeople(id, minute)), target.id);
+    expect(values.every((value) => value > 0)).toBe(true);
+    expect(values[1]).toBeLessThan(target.mid);
   });
 
   test("a discounted event explains its competition factor", async ({ page }) => {

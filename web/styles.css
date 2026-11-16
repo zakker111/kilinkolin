@@ -1,3 +1,7 @@
+@font-face{font-family:'Bebas Neue';font-style:normal;font-weight:400;font-display:swap;src:url('./fonts/bebas-neue-400.woff2') format('woff2');}
+@font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:400;font-display:swap;src:url('./fonts/ibm-plex-mono-400.woff2') format('woff2');}
+@font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:600;font-display:swap;src:url('./fonts/ibm-plex-mono-600.woff2') format('woff2');}
+@font-face{font-family:'Inter';font-style:normal;font-weight:100 900;font-display:swap;src:url('./fonts/inter-latin.woff2') format('woff2');}
 :root{
   --ink:#171310; --ink-2:#1f1a15;
   --paper:#efe8d8; --paper-dim:#c9c0ac;

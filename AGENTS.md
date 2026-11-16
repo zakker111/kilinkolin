@@ -44,12 +44,13 @@ only when the model does. `SCHEMA_VERSION` is 3; event positions 0–6 are still
 ## Layout
 
 ```
-web/            index.html, app.js, map.js, styles.css, config.js, data.json, geo/*.json
+web/            index.html, app.js, map.js, heat-worker.js, styles.css, config.js, fonts/,
+                data.json, geo/*.json and geo/days/<date>.json
 scripts/        build.py (pipeline), calibration.py (fit/backtest), validate.py (gate),
                 routes.py (street geometry), feeds/ (adapters)
 data/           keikat.json (feed snapshot), seed_events.json (SAMPLE rows, never published)
 registry/       venues.json, zones.json  (hand-maintained)
-.github/        workflows/build.yml
+.github/        workflows/build.yml, workflows/ci.yml
 ```
 
 ## Commands
@@ -88,6 +89,12 @@ means the source published no start. The UI must label it TBA, and the heat must
 to 19:00: the flow carries `start_options` (18:00, 19:00, 20:00) and `start_window`
 ("18:00–20:00"), and the browser averages the arrival/egress curves over those candidate
 starts. The row's empty time is never filled in to look published.
+
+`web/geo/days/<date>.json`: the same flow objects for one night plus the union of the walking
+routes those flows reference, keyed by `venue|hub:*` / `venue|zone:*`. It also carries the
+`schema_version`, `model_version`, `generated` and `date` stamps. The browser loads only the
+selected day's bundle; `geo/flows.json` and `geo/routes.json` stay complete for validation and
+the route/data gates, and are the fallback when a day bundle cannot be fetched.
 
 `web/geo/flows.json`: per event `attendance{low,mid,high,spread}`,
 `interest{score,band,signals}`, `basis{capacity,capacity_source,fill,fill_source,interest,

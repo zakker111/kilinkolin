@@ -72,13 +72,20 @@
         `<span class="day-mon">${MONTHS[d.getMonth()]}</span></button>`;
     }).join("");
     strip.querySelectorAll(".day").forEach((btn) => {
-      btn.onclick = () => {
-        const min = window.KMap.setDay(btn.dataset.day);
-        curDay = btn.dataset.day;
-        markDay(btn.dataset.day);
-        revealDay(btn);
-        setTime(min, true);
-        renderPanel();
+      btn.onclick = async () => {
+        if (btn.disabled) return;
+        btn.disabled = true;
+        try {
+          const min = await window.KMap.setDay(btn.dataset.day);
+          if (min == null) return;
+          curDay = btn.dataset.day;
+          markDay(btn.dataset.day);
+          revealDay(btn);
+          setTime(min, true);
+          renderPanel();
+        } finally {
+          btn.disabled = false;
+        }
       };
     });
     return days;
@@ -352,7 +359,9 @@
     renderPanel();
 
     let queued = 0;
+    let scrubTimer = 0;
     $("timeSlider").addEventListener("input", (e) => {
+      window.KMap.setScrubbing(true);
       setTime(+e.target.value, false);
       if (queued) cancelAnimationFrame(queued);
       queued = requestAnimationFrame(() => {
@@ -360,6 +369,8 @@
         window.KMap.setTime(+$("timeSlider").value);
         updatePanelNow();
       });
+      clearTimeout(scrubTimer);
+      scrubTimer = setTimeout(() => window.KMap.setScrubbing(false), 160);
     });
   }
 

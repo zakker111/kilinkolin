@@ -49,6 +49,24 @@ def main():
     data = load(os.path.join(WEB, "data.json"))
     calibration = data.get("calibration") or {}
     flows = load(os.path.join(WEB, "geo", "flows.json"))
+    day_dir = os.path.join(WEB, "geo", "days")
+    day_files = {}
+    for day in sorted({row[0] for row in data.get("events", []) if len(row) >= 1}):
+        path = os.path.join(day_dir, f"{day}.json")
+        if not os.path.exists(path):
+            errors.append(f"missing per-day flow bundle geo/days/{day}.json")
+            continue
+        try:
+            doc = load(path)
+        except json.JSONDecodeError as exc:
+            errors.append(f"geo/days/{day}.json is not valid JSON: {exc}")
+            continue
+        if doc.get("date") != day:
+            errors.append(f"geo/days/{day}.json has date {doc.get('date')!r}")
+        if not isinstance(doc.get("events"), list):
+            errors.append(f"geo/days/{day}.json has no event list")
+        else:
+            day_files[day] = doc
     venues = load(os.path.join(WEB, "geo", "venues.json"))
     zones = load(os.path.join(WEB, "geo", "zones.json"))
     routes = load(os.path.join(WEB, "geo", "routes.json")).get("routes", {})

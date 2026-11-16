@@ -4,7 +4,7 @@ An **estimated crowd-flow heat map** for events in Tampere: pick a day, drag the
 where the estimated crowd is on the streets at that moment. The map is the answer; the panel
 names what is on.
 
-Live: https://zakker111.github.io/kilinkolin/ · **v0.16.1** · model **2026.11.11** · schema **3**
+Live: https://zakker111.github.io/kilinkolin/ · **v0.16.3** · model **2026.11.11** · schema **3**
 
 ## What it does
 
@@ -119,9 +119,20 @@ start. The current build has 22 TBA events.
 
 ## Performance
 
-- Browser route geometry is simplified at build time (Douglas-Peucker, ~9 m) and rounded to five
-  decimals. The full OSRM geometry stays in `registry/routes.json`.
-- JSON is fetched with normal HTTP caching, and phone rendering caps canvas DPR and heat samples.
+- The build writes `web/geo/days/<date>.json`: that day's flows and only the walking legs they
+  use. The browser fetches just the selected day instead of the full 4.2 MB flows + routes pair;
+  the 127 day files total 9.6 MB and the largest is 409 KB. The full files remain for validation
+  and the route/data gates, and the browser falls back to them if a day file is unavailable.
+- Heat is rasterised in an `OffscreenCanvas` worker when available, so a fresh day or route
+  change does not block the main thread; the synchronous renderer remains the fallback.
+- While dragging, wheeling or zooming, the map renders at a lower internal DPR and restores full
+  quality after the interaction. The hour scrubber uses 0.55-quality heat samples and restores
+  full quality 160 ms after the last input. Long OSM traces are decimated for the heat.
+- The basemap is composed once into a cached tile canvas, so a pan or heat repaint does not
+  redraw every tile. Browser route geometry is simplified at build time (Douglas-Peucker, ~9 m)
+  and rounded to five decimals; the full OSRM geometry stays in `registry/routes.json`.
+- The three Latin WOFF2 font subsets are served from `web/fonts/` with preloads, so rendering
+  does not wait on a Google Fonts connection. JSON is fetched with normal HTTP caching.
 - The hour slider updates row state in place instead of rebuilding the list on every input.
 
 ## Build
@@ -137,19 +148,23 @@ cd tests && npm ci && npx playwright install chromium && npm test
 ```
 
 The suite runs 17 Python model tests for calibration states, cap edges, dedupe, missing-time
-handling, TBA start options, competition cases and venue-collision allocation, then 14 Playwright
-checks: switching days, both ends of the hour slider, tapping a real map dot, duplicate-free
-data, TBA labels and spread window, capacity caps, the competition and venue-split panel rows,
-the "Why this number?" panel and the Liiga fitted-fill/backtest text. The build workflow runs it
-before deployment.
+handling, TBA start options, competition cases and venue-collision allocation, plus 8 Python
+tests for the route-coverage and data-churn gates. It then runs 14 Playwright checks: switching
+days, both ends of the hour slider, tapping a real map dot, duplicate-free data, TBA labels and
+spread window, capacity caps, the competition and venue-split panel rows, the "Why this number?"
+panel and the Liiga fitted-fill/backtest text. The build workflow runs it before deployment, then
+runs a separate live Pages smoke test after deployment.
 
 ## Deploy
 
 GitHub Actions → Pages. `Pages → Source` must be **GitHub Actions**.
 
 The workflow refreshes events once a week, on Sundays at 04:00 UTC, and also runs on pushes
-that change the build. `validate.py` and the test suite block deployment, so a failed build
-leaves the last good site up.
+that change the build. Pull requests run the same build, route, validation and browser checks
+without deploying. `validate.py` and the test suite block deployment, so a failed build leaves
+the last good site up. A main deployment is smoke-tested against the live Pages URL; if that
+check fails, the previous Pages artifact is redeployed, the job fails, and a `CI failure` issue
+is opened or updated.
 
 No map key or secret is required: the basemap is OpenStreetMap raster tiles. Optional secret
 `DIGITRANSIT_API_KEY` is available at build time for routing.

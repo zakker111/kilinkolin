@@ -1356,12 +1356,44 @@ def build(mode="full", with_samples=False):
     web_routes = {}
     for key, rec in used_routes.items():
         web_routes[key] = {**rec, "geometry": simplify_geometry(rec.get("geometry") or [])}
-    write(os.path.join(GEO, "routes.json"), {
+    routes_doc_out = {
         "schema_version": 1,
         "source": routes_doc.get("source", "OSRM foot"),
         "generated": data_doc["generated"],
         "routes": web_routes,
-    })
+    }
+    write(os.path.join(GEO, "routes.json"), routes_doc_out)
+
+    # The page used to download every flow and every route on first paint.  Most
+    # visits only need the selected day, so publish one self-contained bundle per
+    # date and let the browser fetch those lazily.  Keep the full files above for
+    # consumers that still expect them and for the validation/coverage gates.
+    days_dir = os.path.join(GEO, "days")
+    os.makedirs(days_dir, exist_ok=True)
+    for name in os.listdir(days_dir):
+        if name.endswith(".json"):
+            os.remove(os.path.join(days_dir, name))
+    date_by_id = {row[7]: row[0] for row in rows}
+    by_day = defaultdict(list)
+    for flow in flows:
+        by_day[date_by_id.get(flow["id"])].append(flow)
+    for day, day_flows in sorted(by_day.items()):
+        if not day:
+            continue
+        day_routes = {}
+        for flow in day_flows:
+            for leg in flow.get("legs", []):
+                key = leg["key"]
+                if key in web_routes:
+                    day_routes[key] = web_routes[key]
+        write(os.path.join(days_dir, f"{day}.json"), {
+            "schema_version": FLOWS_SCHEMA_VERSION,
+            "model_version": MODEL_VERSION,
+            "generated": data_doc["generated"],
+            "date": day,
+            "events": day_flows,
+            "routes": day_routes,
+        })
 
     write(os.path.join(GEO, "coverage.json"), {
         "generated": data_doc["generated"], "sources": status,

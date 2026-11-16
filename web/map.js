@@ -5,13 +5,21 @@
   const CFG = window.KILINKOLIN || {};
   const TILE = 256;
   const HEAT_SCALE = 0.4;
+  // Pan the existing heat bitmap while the camera stays inside this margin.
+  // A full 600 px drag then stays on the cached bitmap instead of restamping
+  // every street on every animation frame.
+  const HEAT_PAD = 640;
   const MOBILE = window.matchMedia("(max-width: 700px), (pointer: coarse) and (max-width: 1024px), (max-width: 1000px) and (max-height: 520px)").matches;
   document.documentElement.classList.toggle("is-mobile", MOBILE);
   document.documentElement.dataset.mobile = MOBILE ? "true" : "false";
 
   const S = { events: [], flows: {}, venues: {}, routes: {}, map: null, dotHits: [],
               hoverId: null, onHover: null, day: null, minutes: 19 * 60,
-              aggVersion: 0, heatKey: null, heatLayer: null, shapes: [] };
+              aggVersion: 0, heatLayer: null, heatView: null, heatAggVersion: -1, heatQuality: -1,
+              heatShapes: null, labelShapes: [], shapes: [], zooming: false, scrubbing: false,
+              worker: undefined, heatRequestId: 0, heatPendingKey: null, heatRequestMeta: null,
+              dayList: [], sortedLegs: null, sortedLegsVersion: -1,
+              sortedVenues: null, sortedVenuesVersion: -1 };
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
@@ -25,9 +33,13 @@
       this.minZoom = 8;
       this.maxZoom = 16.5;
       this.tiles = new Map();
+      this.tileLayer = null;
+      this.tileKey = null;
       this.paint = null;
       this._z = 12; this._scale = 1; this._ox = 0; this._oy = 0;
       this._zoomRaf = null;
+      this._low = false;
+      this._lowTimer = null;
       this._bind();
       this.resize();
     }
@@ -36,12 +48,26 @@
       const h = this.canvas.clientHeight || 520;
       // Large canvases are fill-rate bound; 1.5x is visually ample for the heat
       // and keeps retina desktops from painting 2x the pixels every frame.
-      const dpr = Math.min(window.devicePixelRatio || 1, MOBILE ? 1.75 : (w * h > 900000 ? 1.5 : 2));
+      this.baseDpr = Math.min(window.devicePixelRatio || 1, MOBILE ? 1.75 : (w * h > 900000 ? 1.5 : 2));
+      const dpr = this._low ? Math.min(this.baseDpr, MOBILE ? 1.2 : 1.5) : this.baseDpr;
       this.w = w; this.h = h; this.dpr = dpr;
       this.canvas.width = Math.round(w * dpr);
       this.canvas.height = Math.round(h * dpr);
       this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       this.schedule();
+    }
+    setLowRes(on) {
+      if (this._low === on) return;
+      this._low = on;
+      this.resize();
+    }
+    startInteraction() {
+      clearTimeout(this._lowTimer);
+      this.setLowRes(true);
+    }
+    endInteraction(delay = 120) {
+      clearTimeout(this._lowTimer);
+      this._lowTimer = setTimeout(() => this.setLowRes(false), delay);
     }
     worldX(lon, z) { return (lon + 180) / 360 * TILE * Math.pow(2, z); }
     worldY(lat, z) {
@@ -92,23 +118,36 @@
       this._z = z; this._scale = scale; this._ox = ox; this._oy = oy;
 
       const ctx = this.ctx;
-      ctx.fillStyle = "#e7e2d6";
-      ctx.fillRect(0, 0, this.w, this.h);
-
-      const n = Math.pow(2, z);
-      const x0 = Math.floor(ox / ts), x1 = Math.floor((ox + this.w) / ts);
-      const y0 = Math.floor(oy / ts), y1 = Math.floor((oy + this.h) / ts);
+      const tileKey = `${z}|${scale}|${ox}|${oy}|${this.w}|${this.h}`;
+      if (!this.tileLayer) this.tileLayer = document.createElement("canvas");
+      const tw = Math.max(1, Math.round(this.w));
+      const th = Math.max(1, Math.round(this.h));
       let painted = 0;
-      for (let x = x0; x <= x1; x++) {
-        for (let y = y0; y <= y1; y++) {
-          if (y < 0 || y >= n) continue;
-          const tx = ((x % n) + n) % n;
-          const img = this.tile(z, tx, y);
-          if (!img) continue;
-          ctx.drawImage(img, Math.round(x * ts - ox), Math.round(y * ts - oy), Math.ceil(ts) + 1, Math.ceil(ts) + 1);
-          painted++;
+      if (this.tileKey !== tileKey || this.tileLayer.width !== tw || this.tileLayer.height !== th) {
+        this.tileLayer.width = tw;
+        this.tileLayer.height = th;
+        const tc = this.tileLayer.getContext("2d");
+        tc.setTransform(1, 0, 0, 1, 0, 0);
+        tc.fillStyle = "#e7e2d6";
+        tc.fillRect(0, 0, tw, th);
+        const n = Math.pow(2, z);
+        const x0 = Math.floor(ox / ts), x1 = Math.floor((ox + this.w) / ts);
+        const y0 = Math.floor(oy / ts), y1 = Math.floor((oy + this.h) / ts);
+        for (let x = x0; x <= x1; x++) {
+          for (let y = y0; y <= y1; y++) {
+            if (y < 0 || y >= n) continue;
+            const tx = ((x % n) + n) % n;
+            const img = this.tile(z, tx, y);
+            if (!img) continue;
+            tc.drawImage(img, Math.round(x * ts - ox), Math.round(y * ts - oy), Math.ceil(ts) + 1, Math.ceil(ts) + 1);
+            painted++;
+          }
         }
+        this.tileKey = tileKey;
+      } else {
+        painted = 1;
       }
+      ctx.drawImage(this.tileLayer, 0, 0, this.w, this.h);
       if (painted) {
         const loading = $("mapLoading");
         if (loading && loading.style.display !== "none") {
@@ -125,7 +164,7 @@
       if (!rec) {
         const img = new Image();
         img.crossOrigin = "anonymous";
-        img.addEventListener("load", () => this.schedule());
+        img.addEventListener("load", () => { this.tileKey = null; this.schedule(); });
         img.src = (CFG.TILE_URL || "https://tile.openstreetmap.org/{z}/{x}/{y}.png")
           .replace("{z}", z).replace("{x}", x).replace("{y}", y);
         rec = { img };
@@ -146,13 +185,23 @@
       const end = Math.max(this.minZoom, Math.min(this.maxZoom, target));
       const start = this.zoom, t0 = performance.now();
       if (this._zoomRaf) cancelAnimationFrame(this._zoomRaf);
+      S.zooming = true;
+      this.startInteraction();
       const step = (now) => {
         const k = Math.min(1, (now - t0) / 240);
         const eased = 1 - Math.pow(1 - k, 3);
         this.zoom = start + (end - start) * eased;
         this.draw();
         if (k < 1) this._zoomRaf = requestAnimationFrame(step);
-        else { this._zoomRaf = null; this.schedule(); }
+        else {
+          this._zoomRaf = null;
+          S.zooming = false;
+          this.endInteraction(0);
+          // One fresh raster after the animation, not one per zoom frame.
+          S.heatView = null;
+          S.heatAggVersion = -1;
+          this.schedule();
+        }
       };
       this._zoomRaf = requestAnimationFrame(step);
     }
@@ -165,6 +214,7 @@
         down = { x: e.clientX, y: e.clientY, t: Date.now() };
         c.setPointerCapture(e.pointerId);
         c.style.cursor = "grabbing";
+        this.startInteraction();
         if (S.hideTip) S.hideTip();
       });
       c.addEventListener("pointermove", (e) => {
@@ -179,6 +229,7 @@
       const end = (e) => {
         const wasTap = down && e && Math.hypot((e.clientX || 0) - down.x, (e.clientY || 0) - down.y) < 8 && Date.now() - down.t < 700;
         drag = null; down = null; c.style.cursor = "grab";
+        this.endInteraction();
         this.schedule();
         if (wasTap && this.onTap) this.onTap(e);
       };
@@ -196,10 +247,11 @@
         const r = c.getBoundingClientRect();
         const mx = e.clientX - r.left, my = e.clientY - r.top;
         const before = this.unproject(mx, my);
+        this.startInteraction();
         this.zoom = Math.max(this.minZoom, Math.min(this.maxZoom, this.zoom - e.deltaY * 0.0025));
-        this.draw();
         const after = this.unproject(mx, my);
         this.center = { lat: this.center.lat + (before.lat - after.lat), lon: this.center.lon + (before.lon - after.lon) };
+        this.endInteraction(180);
         this.schedule();
       }, { passive: false });
       window.addEventListener("resize", () => this.resize());
@@ -262,16 +314,16 @@
   }
 
   /* reduced-resolution buffer: smooth heat, cheap to colourise every frame */
-  function ensureHalf(map) {
-    const w = Math.max(1, Math.round(map.w * HEAT_SCALE));
-    const h = Math.max(1, Math.round(map.h * HEAT_SCALE));
+  function ensureHalf(map, scale = HEAT_SCALE) {
+    const w = Math.max(1, Math.round(map.w * scale));
+    const h = Math.max(1, Math.round(map.h * scale));
     if (!S.half) S.half = document.createElement("canvas");
     if (S.half.width !== w || S.half.height !== h) { S.half.width = w; S.half.height = h; }
     const c = S.half.getContext("2d");
     c.setTransform(1, 0, 0, 1, 0, 0);
     c.clearRect(0, 0, w, h);
     c.globalCompositeOperation = "lighter";
-    c.scale(HEAT_SCALE, HEAT_SCALE);
+    c.scale(scale, scale);
     return S.half;
   }
 
@@ -290,7 +342,7 @@
     return canvas;
   }
 
-  function deposit(half, shapes, zoom) {
+  function deposit(half, shapes, zoom, quality = 1) {
     const c = half.getContext("2d");
     if (!heatSprite) heatSprite = makeHeatSprite(0.45);
     if (!homeSprite) homeSprite = makeHeatSprite(0.55);
@@ -303,7 +355,8 @@
       const len = lens[i];
       // sqrt-ish: a long approach with few people still needs to be seen
       const weight = Math.pow(Math.min(1, density[i] / top), 0.6);
-      const n = Math.max(6, Math.min(MOBILE ? 120 : 180, Math.round(len / 7)));
+      const sampleCap = Math.round((MOBILE ? 120 : 180) * quality);
+      const n = Math.max(6, Math.min(sampleCap, Math.round(len / 7 * quality)));
       // wider kernels when zoomed out, so long approaches read as heat and not as hairlines
       const zoomBoost = Math.min(2.4, Math.max(0.6, Math.pow(2, 13.2 - zoom)));
       const radius = (6 + 7.5 * weight) * zoomBoost;
@@ -359,10 +412,11 @@
     ctx.restore();
   }
 
-  function drawTrafficHeat(ctx, map, shapes, magnitude) {
+  function drawTrafficHeat(ctx, map, shapes, magnitude, quality = 1) {
     if (!shapes.length) return;
-    const half = ensureHalf(map);
-    deposit(half, shapes, map.zoom);
+    const scale = quality < 1 ? HEAT_SCALE * 0.7 : HEAT_SCALE;
+    const half = ensureHalf(map, scale);
+    deposit(half, shapes, map.zoom, quality);
     colourise(half, ctx, map, 235, magnitude);
   }
 
@@ -472,12 +526,22 @@
   }
 
   /* ---------------------------------------------------------- heat layer */
-  function buildShapes(map, legs, total) {
+  function buildShapes(map, legs, total, pad = 0) {
     const shapes = [];
     for (const leg of legs) {
       const route = S.routes[leg.key];
       if (!route || !route.geometry) continue;
-      const pts = route.geometry.map((pt) => map.project(pt[0], pt[1]));
+      // The heat does not need every vertex of a long OSRM trace. Reuse a
+      // decimated trace for the density field; the untouched geometry remains
+      // available for any detailed consumer.
+      const source = route.geometry;
+      const step = source.length > 80 ? 3 : source.length > 28 ? 2 : 1;
+      const pts = [];
+      for (let i = 0; i < source.length; i++) {
+        if (i % step === 0 || i === source.length - 1) {
+          pts.push(map.project(source[i][0], source[i][1]));
+        }
+      }
       if (pts.length < 2) continue;
       let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
       for (const p of pts) {
@@ -486,7 +550,9 @@
         if (p.y < minY) minY = p.y;
         if (p.y > maxY) maxY = p.y;
       }
-      const margin = 40;
+      // Keep geometry in the padding too, so a pan can reveal cached heat
+      // before the next full rasterisation.
+      const margin = 40 + pad;
       if (maxX < -margin || minX > map.w + margin ||
           maxY < -margin || minY > map.h + margin) continue;
       shapes.push({
@@ -497,38 +563,179 @@
     return shapes;
   }
 
+  /* The worker returns the padded heat bitmap off the main thread. It is an
+     enhancement: unsupported browsers fall back to the synchronous renderer. */
+  function ensureHeatWorker() {
+    if (S.worker !== undefined) return S.worker;
+    if (typeof Worker === "undefined" || typeof OffscreenCanvas === "undefined") {
+      S.worker = null;
+      return null;
+    }
+    try {
+      const worker = new Worker("./heat-worker.js");
+      worker.onmessage = (event) => {
+        const msg = event.data || {};
+        if (msg.id !== S.heatRequestId || !S.heatRequestMeta) {
+          if (msg.bitmap && msg.bitmap.close) msg.bitmap.close();
+          return;
+        }
+        const meta = S.heatRequestMeta;
+        S.heatPendingKey = null;
+        S.heatRequestMeta = null;
+        if (msg.error || !msg.bitmap) {
+          console.warn("heat worker failed, using main-thread fallback", msg.error || "no bitmap");
+          worker.terminate();
+          S.worker = null;
+          if (S.map) S.map.schedule();
+          return;
+        }
+        if (S.heatLayer && S.heatLayer.close) S.heatLayer.close();
+        S.heatLayer = msg.bitmap;
+        S.heatView = meta.view;
+        S.heatAggVersion = meta.aggVersion;
+        S.heatQuality = meta.quality;
+        if (S.map) S.map.schedule();
+      };
+      worker.onerror = (event) => {
+        console.warn("heat worker error, using main-thread fallback", event.message || event);
+        worker.terminate();
+        S.worker = null;
+        S.heatPendingKey = null;
+        S.heatRequestMeta = null;
+        if (S.map) S.map.schedule();
+      };
+      S.worker = worker;
+      return worker;
+    } catch (err) {
+      console.warn("heat worker unavailable", err);
+      S.worker = null;
+      return null;
+    }
+  }
+
+  function startHeatRender(map, width, height, quality, magnitude, view) {
+    const worker = ensureHeatWorker();
+    if (!worker) return false;
+    const key = `${S.aggVersion}|${quality}|${map._z}|${map._scale}|${map._ox}|${map._oy}|${width}|${height}`;
+    if (S.heatPendingKey === key) return true;
+    const id = ++S.heatRequestId;
+    S.heatPendingKey = key;
+    S.heatRequestMeta = { view, aggVersion: S.aggVersion, quality };
+    worker.postMessage({
+      id, width, height, zoom: map.zoom, quality, magnitude,
+      shapes: S.heatShapes.map((s) => ({
+        people: s.people,
+        pts: s.pts.map((p) => [p.x, p.y]),
+      })),
+    });
+    return true;
+  }
+
   function paintFlow(ctx, map) {
     ctx.fillStyle = "rgba(250,247,241,.34)";
     ctx.fillRect(0, 0, map.w, map.h);
 
     const agg = S.agg || { legs: new Map(), venues: new Map(), people: 0 };
-    const legs = [...agg.legs.values()].sort((a, b) => b.people - a.people);
-    if (!legs.length) { S.shapes = []; paintEventDots(ctx, map); return; }
+    if (S.sortedLegsVersion !== S.aggVersion) {
+      S.sortedLegs = [...agg.legs.values()].sort((a, b) => b.people - a.people);
+      S.sortedLegsVersion = S.aggVersion;
+    }
+    const legs = S.sortedLegs || [];
+    if (!legs.length) {
+      S.shapes = []; S.labelShapes = []; S.heatShapes = null;
+      S.heatView = null; S.heatAggVersion = -1;
+      paintEventDots(ctx, map);
+      return;
+    }
     const total = legs.reduce((sum, l) => sum + l.people, 0) || 1;
-    const viewKey = `${map._z}|${map._scale}|${map._ox}|${map._oy}|${map.w}|${map.h}`;
-    const heatKey = `${S.aggVersion}|${viewKey}`;
+    const quality = S.scrubbing ? 0.55 : 1;
 
-    // One cache for the current aggregate and viewport. A hover or tile repaint
-    // reuses both the heat bitmap and the projected shapes; a time, day or map
-    // move rebuilds them together.
-    if (S.heatKey !== heatKey) {
-      S.shapes = buildShapes(map, legs, total);
-      if (!S.heatLayer) S.heatLayer = document.createElement("canvas");
-      const w = Math.max(1, Math.round(map.w)), h = Math.max(1, Math.round(map.h));
-      if (S.heatLayer.width !== w || S.heatLayer.height !== h) {
-        S.heatLayer.width = w; S.heatLayer.height = h;
-      }
-      const layer = S.heatLayer.getContext("2d");
-      layer.clearRect(0, 0, w, h);
+    // The heat bitmap is padded beyond the viewport. During a pan we crop the
+    // appropriate region from it; only a large camera move, a zoom or new data
+    // forces a fresh rasterisation of all street geometry.
+    let pad = 0, shiftX = 0, shiftY = 0;
+    let labelScale = 1, labelDX = 0, labelDY = 0;
+    let drawHeat = true;
+    const cached = S.heatLayer && S.heatView && S.heatAggVersion === S.aggVersion
+      && S.heatQuality === quality;
+    const sameSize = cached && S.heatView.w === map.w && S.heatView.h === map.h;
+    const sameView = sameSize && S.heatView.z === map._z && S.heatView.scale === map._scale;
+    const canShift = sameView
+      && Math.abs(map._ox - S.heatView.ox) <= S.heatView.pad * 0.95
+      && Math.abs(map._oy - S.heatView.oy) <= S.heatView.pad * 0.95;
+    const canZoomPreview = sameSize && S.zooming;
+
+    if (canZoomPreview) {
+      // The animation is a transform of the last raster; rebuilding 2,500
+      // projected routes on every zoom frame is what made zooming hitch.
+      pad = S.heatView.pad;
+      labelScale = map._scale / S.heatView.scale;
+      labelDX = S.heatView.ox * labelScale - map._ox;
+      labelDY = S.heatView.oy * labelScale - map._oy;
+      const sx = pad - labelDX / labelScale;
+      const sy = pad - labelDY / labelScale;
+      ctx.drawImage(S.heatLayer, sx, sy, map.w / labelScale, map.h / labelScale,
+                    0, 0, map.w, map.h);
+    } else if (canShift) {
+      pad = S.heatView.pad;
+      shiftX = S.heatView.ox - map._ox;
+      shiftY = S.heatView.oy - map._oy;
+      labelDX = shiftX;
+      labelDY = shiftY;
+    } else {
+      S.shapes = buildShapes(map, legs, total, HEAT_PAD);
+      // Keep enough candidates that the visible subset still has district
+      // names after a pan into the padded area.
+      S.labelShapes = S.shapes.slice()
+        .sort((a, b) => b.share - a.share)
+        .slice(0, 48);
+      S.heatShapes = S.shapes.map((s) => ({
+        ...s,
+        pts: s.pts.map((p) => ({ x: p.x + HEAT_PAD, y: p.y + HEAT_PAD })),
+      }));
+      pad = HEAT_PAD;
+      const w = Math.max(1, Math.round(map.w + pad * 2));
+      const h = Math.max(1, Math.round(map.h + pad * 2));
       // a touch more presence: quiet hours stay faint, busy ones fill the streets
       const magnitude = Math.min(1, Math.max(0.14, Math.log10(total + 1) / 3.1));
-      drawTrafficHeat(layer, map, S.shapes, magnitude);
-      S.heatKey = heatKey;
+      const view = { z: map._z, scale: map._scale, ox: map._ox, oy: map._oy,
+                     w: map.w, h: map.h, pad };
+      const heatMap = { w, h, zoom: map.zoom, _z: map._z, _scale: map._scale,
+                        _ox: map._ox - pad, _oy: map._oy - pad };
+      if (startHeatRender(map, w, h, quality, magnitude, view)) {
+        // The worker owns the new raster; keep the current frame responsive and
+        // let the map show tiles/labels until the bitmap arrives.
+        drawHeat = false;
+      } else {
+        if (!S.heatLayer || !S.heatLayer.getContext) {
+          if (S.heatLayer && S.heatLayer.close) S.heatLayer.close();
+          S.heatLayer = document.createElement("canvas");
+        }
+        if (S.heatLayer.width !== w || S.heatLayer.height !== h) {
+          S.heatLayer.width = w; S.heatLayer.height = h;
+        }
+        const layer = S.heatLayer.getContext("2d");
+        layer.clearRect(0, 0, w, h);
+        drawTrafficHeat(layer, heatMap, S.heatShapes, magnitude, quality);
+        S.heatView = view;
+        S.heatAggVersion = S.aggVersion;
+        S.heatQuality = quality;
+      }
+      labelDX = 0;
+      labelDY = 0;
     }
-    ctx.drawImage(S.heatLayer, 0, 0, map.w, map.h);
+    // Crop the viewport out of the padded bitmap, shifted by the pan delta.
+    if (drawHeat && !canZoomPreview && S.heatLayer) {
+      ctx.drawImage(S.heatLayer, pad - shiftX, pad - shiftY, map.w, map.h,
+                    0, 0, map.w, map.h);
+    }
 
     // the venues people are heading to, sized by how many are on their way
-    [...agg.venues.entries()].sort((a, b) => b[1] - a[1]).forEach(([id, people]) => {
+    if (S.sortedVenuesVersion !== S.aggVersion) {
+      S.sortedVenues = [...agg.venues.entries()].sort((a, b) => b[1] - a[1]);
+      S.sortedVenuesVersion = S.aggVersion;
+    }
+    (S.sortedVenues || []).forEach(([id, people]) => {
       const v = S.venues[id];
       if (!v) return;
       const p = map.project(v.lat, v.lon);
@@ -541,23 +748,28 @@
 
     // district names only: the map answers where, not which gig
     const placed = [];
-    S.shapes.sort((a, b) => b.share - a.share).slice(0, MOBILE ? 4 : 6).forEach((s) => {
+    const labelLimit = MOBILE ? 4 : 6;
+    (S.labelShapes || []).forEach((s) => {
       const p = s.pts[0];
+      const px = p.x * labelScale + labelDX;
+      const py = p.y * labelScale + labelDY;
+      if (placed.length >= labelLimit) return;
+      if (px < -20 || px > map.w + 20 || py < -20 || py > map.h + 20) return;
       const text = s.name;
       ctx.font = "600 10px 'IBM Plex Mono', monospace";
       const wText = ctx.measureText(text).width;
-      let by = p.y - 4;
-      let box = { x: p.x + 6, y: by - 10, w: wText, h: 12 };
+      let by = py - 4;
+      let box = { x: px + 6, y: by - 10, w: wText, h: 12 };
       const hits = (b) => placed.some((o) => b.x < o.x + o.w + 3 && b.x + b.w + 3 > o.x && b.y < o.y + o.h + 2 && b.y + b.h + 2 > o.y);
       let tries = 0;
-      while (hits(box) && tries < 4) { by -= 13; box = { x: p.x + 6, y: by - 10, w: wText, h: 12 }; tries++; }
+      while (hits(box) && tries < 4) { by -= 13; box = { x: px + 6, y: by - 10, w: wText, h: 12 }; tries++; }
       if (hits(box)) return;
       placed.push(box);
       ctx.fillStyle = "rgba(26,18,14,.92)";
       ctx.strokeStyle = "rgba(255,255,255,.85)";
       ctx.lineWidth = 3;
-      ctx.strokeText(text, p.x + 6, by);
-      ctx.fillText(text, p.x + 6, by);
+      ctx.strokeText(text, px + 6, by);
+      ctx.fillText(text, px + 6, by);
     });
 
     paintEventDots(ctx, map);
@@ -568,7 +780,7 @@
   function paintEventDots(ctx, map) {
     S.dotHits = [];
     const taken = {};
-    S.events.filter((ev) => ev.date === S.day).forEach((ev) => {
+    (S.dayList || []).forEach((ev) => {
       const flow = S.flows[ev.id];
       if (!flow) return;
       const v = S.venues[flow.venue_id];
@@ -629,10 +841,23 @@
   }
 
   function refresh() {
+    S.dayList = S.events.filter((ev) => ev.date === S.day);
     S.agg = aggregate();
     S.aggVersion += 1;
     if (S.map) S.map.schedule();
     renderEstimate();
+  }
+
+  function setScrubbing(on) {
+    if (S.scrubbing === on) return;
+    S.scrubbing = on;
+    S.heatView = null;
+    S.heatAggVersion = -1;
+    S.heatQuality = -1;
+    if (S.map) {
+      S.map.setLowRes(on);
+      S.map.schedule();
+    }
   }
 
   /* -------------------------------------------------------------- wiring */
@@ -657,18 +882,60 @@
     return best;
   }
 
+  function resetHeat() {
+    S.heatView = null;
+    S.heatAggVersion = -1;
+    S.heatQuality = -1;
+    S.heatRequestId += 1;
+    S.heatPendingKey = null;
+    S.heatRequestMeta = null;
+    S.sortedLegs = null;
+    S.sortedLegsVersion = -1;
+    S.sortedVenues = null;
+    S.sortedVenuesVersion = -1;
+    S.shapes = [];
+    S.labelShapes = [];
+    S.heatShapes = null;
+  }
+
+  async function loadDay(day) {
+    const res = await fetch(`./geo/days/${encodeURIComponent(day)}.json`);
+    if (!res.ok) throw new Error(`day ${day}: HTTP ${res.status}`);
+    const doc = await res.json();
+    S.flows = {};
+    S.routes = doc.routes || {};
+    (doc.events || []).forEach((flow) => { S.flows[flow.id] = flow; });
+    resetHeat();
+  }
+
+  /* Compatibility path for an older deployment that has no per-day bundles yet. */
+  async function loadAllFlows() {
+    const [flows, routes] = await Promise.all([
+      fetch("./geo/flows.json").then((r) => r.json()),
+      fetch("./geo/routes.json").then((r) => r.json()).catch(() => ({ routes: {} }))
+    ]);
+    S.flows = {};
+    S.routes = routes.routes || {};
+    (flows.events || []).forEach((flow) => { S.flows[flow.id] = flow; });
+    resetHeat();
+  }
+
   async function init(events) {
     S.events = events || [];
     wire();
+    const days = [...new Set(S.events.map((e) => e.date))].sort();
+    S.day = days[0] || null;
     try {
-      const [flows, venues, routes] = await Promise.all([
-        fetch("./geo/flows.json").then((r) => r.json()),
-        fetch("./geo/venues.json").then((r) => r.json()),
-        fetch("./geo/routes.json").then((r) => r.json()).catch(() => ({ routes: {} }))
-      ]);
-      S.routes = routes.routes || {};
-      (flows.events || []).forEach((f) => { S.flows[f.id] = f; });
+      const venues = await fetch("./geo/venues.json").then((r) => r.json());
       (venues.venues || []).forEach((v) => { S.venues[v.id] = v; });
+      if (S.day) {
+        try {
+          await loadDay(S.day);
+        } catch (err) {
+          console.warn("per-day flow data unavailable, using full bundle", err);
+          await loadAllFlows();
+        }
+      }
     } catch (err) {
       console.error("flow data failed", err);
     }
@@ -688,8 +955,6 @@
     S.map.setCenter(61.4978, 23.7610, 13.2);
     S.map.schedule();
 
-    const days = [...new Set(S.events.map((e) => e.date))].sort();
-    S.day = days[0] || null;
     S.minutes = 19 * 60;
     if (S.day) S.minutes = peakMinute(S.day);
     refresh();
@@ -700,10 +965,11 @@
     onHover(cb) { S.onHover = cb; },
     currentDay() { return S.day; },
     now() { return S.minutes; },
+    renderer() { return S.worker ? "worker" : "main"; },
     venue(id) { return S.venues[id] || null; },
     /* every event on the chosen day, with the minutes the map uses */
     dayEvents() {
-      return S.events.filter((ev) => ev.date === S.day).map((ev) => {
+      return (S.dayList || []).map((ev) => {
         const f = S.flows[ev.id] || {};
         const v = S.venues[f.venue_id] || {};
         return {
@@ -728,11 +994,18 @@
       if (S.map) S.map.schedule();
     },
     refresh() { refresh(); },
-    setDay(day) {
-      if (!day) return;
+    setScrubbing,
+    async setDay(day) {
+      if (!day) return null;
       if (S.hideTip) S.hideTip();
       S.hoverId = null;
       if (S.onHover) S.onHover(null);
+      try {
+        await loadDay(day);
+      } catch (err) {
+        console.error("day flow data failed", err);
+        return null;
+      }
       S.day = day;
       S.minutes = peakMinute(day);
       refresh();

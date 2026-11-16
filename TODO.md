@@ -25,6 +25,8 @@
 - [ ] Mode split is a distance heuristic — Nokia Arena gets 24 % car despite the adjacent station;
       calibrate against real HSL/Digitransit trip data before trusting the shares
 - [x] Validation gate + GitHub Actions workflow (weekly sync and rebuild, Pages deploy)
+- [x] CI hardening: pull-request checks; route-coverage and build-to-build churn gates; live
+      Pages smoke test with last-good artifact rollback; failure issue alerts
 - [x] Scheduled refresh fetches route geometry for new origins before deploying, so weekly
       updates keep the street heat instead of straight lines
 - [x] Every event contributes: no-time rows count at 19:00, daytime and after-midnight events are
@@ -33,6 +35,15 @@
 - [x] Phone layout: stacked controls, larger touch targets, viewport-sized map, no sideways scroll
 - [x] Mobile performance: browser route geometry simplified (3.25 MB -> 1.43 MB), canvas DPR capped
       at 1.75, normal HTTP caching, in-place panel updates and a compact legend
+- [x] Map performance: padded heat bitmap reused while panning; zoom preview avoids re-rasterising
+      every street on every frame (26-event day: 25.3 -> 58.2 fps at DPR 2)
+- [x] Per-day payloads: `web/geo/days/<date>.json` loads only the selected day's flows and routes
+      (largest day 409 KB vs the 4.2 MB full pair; full files retained for gates and fallback)
+- [x] OffscreenCanvas heat worker with synchronous fallback and stale-result protection
+- [x] Adaptive render quality: lower DPR while dragging/zooming/wheeling and 0.55 heat samples
+      while scrubbing, restored after 160 ms idle
+- [x] Cached tile composite, decimated heat traces and a cached day-event list
+- [x] Self-hosted Latin WOFF2 font subsets with preloads instead of a Google Fonts connection
 - [x] Mobile detection: `html.is-mobile` from viewport/pointer, a 50dvh map and four map labels
 - [x] Release 0.13.0: version bump and README, NOTICE, AGENTS and TODO refreshed to the live
       day-and-hour site
