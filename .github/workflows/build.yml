@@ -2,9 +2,7 @@ name: Build Kilinkolin
 
 on:
   schedule:
-    - cron: "15 5 * * *"   # daily: pull the latest events and redeploy
-    - cron: "0 4 * * 0"    # Sunday: weekly full rebuild, guaranteed weekly refresh
-    - cron: "0 6 * * 0"    # Sunday retry: second attempt if the 04:00 rebuild failed
+    - cron: "0 4 * * 0"    # Sunday: weekly refresh and full rebuild
   workflow_dispatch:
     inputs:
       full_rebuild:

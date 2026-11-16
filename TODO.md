@@ -24,7 +24,7 @@
       (done manually for 0.13.2)
 - [ ] Mode split is a distance heuristic — Nokia Arena gets 24 % car despite the adjacent station;
       calibrate against real HSL/Digitransit trip data before trusting the shares
-- [x] Validation gate + GitHub Actions workflow (daily sync, weekly rebuild, Pages deploy)
+- [x] Validation gate + GitHub Actions workflow (weekly sync and rebuild, Pages deploy)
 - [x] Scheduled refresh fetches route geometry for new origins before deploying, so weekly
       updates keep the street heat instead of straight lines
 - [x] Every event contributes: no-time rows count at 19:00, daytime and after-midnight events are
@@ -75,7 +75,8 @@
 - [x] Every published event resolves to a venue with a real address: a street address found in a
       row now outranks the generic fallback, and Finlaysonin kirkko (Puuvillatehtaankatu 2) is
       registered with its OSM coordinates and the parish's published capacity
-- [x] Sunday retry cron (`0 6 * * 0`) after the weekly 04:00 rebuild
+- [x] 0.13.6 weekly-only refresh: one Sunday 04:00 UTC scheduled run; the daily 05:15 UTC sync
+      and Sunday 06:00 UTC retry were removed
 - [x] A total feed failure keeps the last good data: the build refuses to write an empty
       map and exits non-zero, so the workflow stops before committing or deploying
 - [x] City calendar adapter: `scripts/feeds/city_events.py` publishes stage, culture, library

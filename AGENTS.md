@@ -9,9 +9,9 @@ hour; the map aggregates every event that day into the streets people are estima
 that moment, plus the number on the move. A right-hand panel names what is on that day and shows
 the event under the pointer; hovering a dot on the map names the same event there.
 Python builds the data in GitHub Actions; the browser only fetches JSON, tiles and renders.
-The workflow refreshes every day at 05:15 UTC and does a guaranteed full rebuild on Sundays at
-04:00 UTC: new events are fetched, their missing street routes are added, the model is rebuilt,
-validated and deployed to Pages.
+The workflow refreshes once a week, on Sundays at 04:00 UTC: new events are fetched, their
+missing street routes are added, the model is rebuilt, validated and deployed to Pages. It also
+runs on pushes that change the build.
 Hosted on GitHub Pages at `https://zakker111.github.io/kilinkolin/`.
 
 Not a fork of Tampere Keikat — it reads that project's published feed. See `NOTICE.md`.

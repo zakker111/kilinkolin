@@ -4,7 +4,7 @@ An **estimated crowd-flow heat map** for events in Tampere: pick a day, drag the
 where the estimated crowd is on the streets at that moment. The map is the answer; the panel
 names what is on.
 
-Live: https://zakker111.github.io/kilinkolin/ · **v0.13.5** · model **2026.11.6** · schema **2**
+Live: https://zakker111.github.io/kilinkolin/ · **v0.13.6** · model **2026.11.6** · schema **2**
 
 ## What it does
 
@@ -67,9 +67,9 @@ The smoke suite covers switching days, both ends of the hour slider (`06:00` and
 
 GitHub Actions → Pages. `Pages → Source` must be **GitHub Actions**.
 
-The workflow syncs events daily at 05:15 UTC, does a guaranteed full rebuild on Sundays at
-04:00 UTC, retries on Sunday at 06:00 UTC, and runs on pushes. `validate.py` and the Playwright
-smoke suite block deployment, so a failed build leaves the last good site up.
+The workflow refreshes events once a week, on Sundays at 04:00 UTC, and also runs on pushes
+that change the build. `validate.py` and the Playwright smoke suite block deployment, so a
+failed build leaves the last good site up.
 
 No map key or secret is required: the basemap is OpenStreetMap raster tiles. Optional secret
 `DIGITRANSIT_API_KEY` is available at build time for routing.
