@@ -35,6 +35,7 @@ def analyze(flows: dict, routes: dict) -> dict:
 
     with_legs = 0
     with_corridors = 0
+    corridor_ids = []
     fallback_ids = []
     missing_keys = []
     empty_geometry = []
@@ -49,6 +50,7 @@ def analyze(flows: dict, routes: dict) -> dict:
             with_legs += 1
         if corridors:
             with_corridors += 1
+            corridor_ids.append(flow_id)
         if corridors and not legs:
             fallback_ids.append(flow_id)
         for leg in legs:
@@ -69,6 +71,8 @@ def analyze(flows: dict, routes: dict) -> dict:
         "total_flows": total,
         "with_legs": with_legs,
         "with_corridors": with_corridors,
+        "corridor_flows": with_corridors,
+        "corridor_ids": corridor_ids,
         "fallback_ids": fallback_ids,
         "missing_keys": missing_keys,
         "empty_geometry": empty_geometry,
@@ -84,10 +88,10 @@ def format_report(result: dict) -> str:
         f"({result['coverage'] * 100:.2f}%); {result['total_legs']} legs, "
         f"{result['unique_leg_keys']} unique keys"
     ]
-    if result["fallback_ids"]:
-        shown = ", ".join(str(item) for item in result["fallback_ids"][:20])
-        suffix = "..." if len(result["fallback_ids"]) > 20 else ""
-        lines.append(f"  corridor-only flows: {shown}{suffix}")
+    if result["with_corridors"]:
+        shown = ", ".join(str(item) for item in result["corridor_ids"][:20])
+        suffix = "..." if len(result["corridor_ids"]) > 20 else ""
+        lines.append(f"  flows with corridor fallback: {result['with_corridors']} ({shown}{suffix})")
     if result["missing_keys"]:
         lines.append(f"  missing route keys: {len(result['missing_keys'])}")
     if result["empty_geometry"]:
@@ -107,7 +111,7 @@ def main(argv: list[str] | None = None) -> int:
         "--max-fallback",
         type=int,
         default=1,
-        help="maximum allowed corridor-only flows when no previous checkpoint exists (default: 1)",
+        help="maximum allowed corridor-fallback flows when no previous checkpoint exists (default: 1)",
     )
     parser.add_argument(
         "--min-covered",
@@ -128,16 +132,25 @@ def main(argv: list[str] | None = None) -> int:
 
     print(format_report(current))
     allowed_fallback = max(0, args.max_fallback)
+    allowed_corridors = max(0, args.max_fallback)
     if previous is not None:
         # A checkpoint is a ceiling, not a floor: a build with zero fallback
-        # flows must not be allowed to introduce a new one.
-        previous_fallback = len(previous["fallback_ids"])
-        allowed_fallback = previous_fallback
-        print(f"  previous checkpoint: {previous_fallback} corridor-only flow(s)")
+        # flows must not be allowed to introduce a new one. Count every flow
+        # with corridors, including one that also has some street legs.
+        allowed_corridors = previous["with_corridors"]
+        allowed_fallback = len(previous["fallback_ids"])
+        print(
+            f"  previous checkpoint: {allowed_corridors} flow(s) with corridors, "
+            f"{allowed_fallback} corridor-only"
+        )
 
     failures = []
     if current["total_flows"] == 0:
         failures.append("no flows were built")
+    if current["with_corridors"] > allowed_corridors:
+        failures.append(
+            f"{current['with_corridors']} flows with corridor fallback exceed the allowed {allowed_corridors}"
+        )
     if len(current["fallback_ids"]) > allowed_fallback:
         failures.append(
             f"{len(current['fallback_ids'])} corridor-only flows exceed the allowed {allowed_fallback}"

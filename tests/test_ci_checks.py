@@ -89,6 +89,15 @@ class RouteCoverageTest(unittest.TestCase):
         )
         self.assertEqual(result["missing_keys"], ["missing"])
 
+    def test_flow_with_legs_and_corridors_still_counts_as_corridor_coverage(self):
+        routes = {"v|zone:a": {"geometry": [[61.5, 23.7], [61.6, 23.8]]}}
+        result = check_route_coverage.analyze(
+            self.flows([{"key": "v|zone:a"}], [{"zone_id": "b"}]), routes
+        )
+        self.assertEqual(result["with_legs"], 1)
+        self.assertEqual(result["with_corridors"], 1)
+        self.assertEqual(result["fallback_ids"], [])
+
 
 if __name__ == "__main__":
     unittest.main()
