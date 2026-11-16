@@ -45,15 +45,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add registry/venues.json .github/workflows/apply-venues.yml
-          git commit -m "$(cat <<'MSG'
-fix: add verified venues for new music events
-
-Place Messukylän kirkko, Vapriikki, Bar Kotelo, Varjobaari and Pub Simon
-with their published addresses and points instead of the addressless fallback.
-
-🤖 Generated with Codebuff
-Co-Authored-By: Codebuff <noreply@codebuff.com>
-MSG
-)"
+          git commit -m "fix: add verified venues for new music events" -m "Place Messukylän kirkko, Vapriikki, Bar Kotelo, Varjobaari and Pub Simon with their published addresses and points instead of the addressless fallback." -m "Generated with Codebuff 🤖"
           git pull --rebase origin main
           git push origin HEAD:main
