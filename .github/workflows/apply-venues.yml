@@ -1,0 +1,59 @@
+name: Apply verified venues
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/apply-venues.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Add verified venues and push
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+          p = Path('registry/venues.json')
+          text = p.read_text()
+          anchor = '    {"id": "tampere_muu"'
+          assert anchor in text, 'tampere_muu anchor missing'
+          if 'messukylan_kirkko' not in text:
+              records = [
+                  {"id": "messukylan_kirkko", "name": "Messukylän kirkko", "aliases": ["messukylän kirkko", "pekko käppi messukylän kirkko"], "address": "Messukylänkatu 54", "lat": 61.4837642, "lon": 23.8482285, "area": "Messukylä", "kind": "church", "capacity": {"gig": 750, "sport": 0}, "hubs": ["hakametsa"], "walk_min": 10, "approx": False, "source": "Tampere parish / OpenStreetMap address point"},
+                  {"id": "vapriikki", "name": "Museokeskus Vapriikki", "aliases": ["vapriikki", "museokeskus vapriikki", "kalle alatalo museokeskus vapriikki"], "address": "Alaverstaanraitti 5", "lat": 61.5029803, "lon": 23.7601459, "area": "Keskusta", "kind": "museum", "capacity": {"gig": 0, "sport": 0}, "hubs": ["koskipuisto"], "walk_min": 6, "approx": False, "source": "Vapriikki / OpenStreetMap address point"},
+                  {"id": "bar_kotelo", "name": "Bar Kotelo", "aliases": ["bar kotelo", "kotelo"], "address": "Sammonkatu 50", "lat": 61.4953224, "lon": 23.8065067, "area": "Kaleva", "kind": "bar", "capacity": {"gig": 0, "sport": 0}, "hubs": ["kaleva"], "walk_min": 5, "approx": False, "source": "Bar Kotelo / OpenStreetMap address point"},
+                  {"id": "varjobaari", "name": "Varjobaari", "aliases": ["varjobaari"], "address": "Insinöörinkatu 38", "lat": 61.4502728, "lon": 23.8495053, "area": "Hervanta", "kind": "bar", "capacity": {"gig": 0, "sport": 0}, "hubs": ["hervanta"], "walk_min": 5, "approx": False, "source": "Varjobaari / OpenStreetMap address point"},
+                  {"id": "pub_simon", "name": "Pub Simon", "aliases": ["pub simon", "simon"], "address": "Hämeenkatu 26", "lat": 61.4974852, "lon": 23.7553668, "area": "Keskusta", "kind": "pub", "capacity": {"gig": 0, "sport": 0}, "hubs": ["koskipuisto"], "walk_min": 5, "approx": False, "source": "Pub Simon / OpenStreetMap address point"}
+              ]
+              block = ''.join('    ' + json.dumps(r, ensure_ascii=False) + ',\n' for r in records)
+              p.write_text(text.replace(anchor, block + anchor, 1))
+          PY
+          rm -f .github/workflows/apply-venues.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add registry/venues.json .github/workflows/apply-venues.yml
+          git commit -m "$(cat <<'MSG'
+fix: add verified venues for new music events
+
+Place Messukylän kirkko, Vapriikki, Bar Kotelo, Varjobaari and Pub Simon
+with their published addresses and points instead of the addressless fallback.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+MSG
+)"
+          git pull --rebase origin main
+          git push origin HEAD:main
