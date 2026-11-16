@@ -43,6 +43,8 @@
 - [x] 0.13.3 student events: Kide product details now supply the published address and point when
       the list's free-text place does not match; 15 more student events (47 → 62), six new
       locations and their walking legs; 257 older stale legs refreshed
+- [x] Browser smoke test: Playwright checks day switching, both 06:00 slider extremes and a real
+      map-dot tap; the build workflow runs it before deploy
 - [x] 0.13.4 completeness: removed the silent city (220) and Kide (80) row caps; all 402 eligible
       calendar rows are evaluated and 398 are published (4 duplicate a source), taking the site to
       576 events / 158 venues; the new venues' 434 walking legs were fetched, leaving 0 corridor

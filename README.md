@@ -55,15 +55,21 @@ python3 scripts/routes.py --from-flow   # add missing walking legs (optional)
 python3 scripts/build.py --city tampere --mode full
 python3 scripts/validate.py             # schema, conservation, coverage
 python3 -m http.server -d web 3003      # preview at http://localhost:3003
+
+# browser smoke test (starts its own server on :4173)
+cd tests && npm ci && npx playwright install chromium && npm test
 ```
+
+The smoke suite covers switching days, both ends of the hour slider (`06:00` and
+`06:00 +1`) and tapping a real map dot. The build workflow runs it before deployment.
 
 ## Deploy
 
 GitHub Actions → Pages. `Pages → Source` must be **GitHub Actions**.
 
 The workflow syncs events daily at 05:15 UTC, does a guaranteed full rebuild on Sundays at
-04:00 UTC, retries on Sunday at 06:00 UTC, and runs on pushes. `validate.py` blocks deployment,
-so a failed build leaves the last good site up.
+04:00 UTC, retries on Sunday at 06:00 UTC, and runs on pushes. `validate.py` and the Playwright
+smoke suite block deployment, so a failed build leaves the last good site up.
 
 No map key or secret is required: the basemap is OpenStreetMap raster tiles. Optional secret
 `DIGITRANSIT_API_KEY` is available at build time for routing.

@@ -59,7 +59,11 @@ python3 scripts/routes.py --from-flow     # only legs the current build draws (f
 python3 scripts/build.py --mode full      # fetch, normalise, model, write web/*
 python3 scripts/validate.py               # gate: schema + conservation + coverage
 python3 -m http.server -d web 3003        # local preview at :3003
+cd tests && npm ci && npx playwright install chromium && npm test  # browser smoke test
 ```
+
+The smoke test starts its own static server on :4173; it is also a blocking pre-deploy step in
+`.github/workflows/build.yml`.
 
 ## Publishers of data must be real
 
