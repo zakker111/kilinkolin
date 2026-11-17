@@ -181,6 +181,8 @@ truncating a sorted feed on every run would make the missing tail permanent.
 `map.js` sets `html.is-mobile` from `(max-width: 700px)` or a coarse pointer up to 1024px. On a
 phone it caps canvas DPR at 1.75 (2 on desktop), samples fewer heat points and draws four map
 labels; the CSS uses a 50dvh map (clamped 280-520px) and hides the duplicate legend swatches.
+On phones the event's "Why" detail opens in a modal bottom sheet so the panel rows stay in place;
+the sheet body is the only scroll area. Desktop keeps the inline disclosure.
 Keep phone checks to a 390x844 touch viewport.
 
 Each district in `registry/zones.json` carries a `transit_mode` (`tram`, `bus` or `rail`). It

@@ -3,7 +3,7 @@ window.KILINKOLIN = {
   APP_NAME: "Kilinkolin",
   TAGLINE: "Estimated crowd flow for events in Tampere.",
   CITY: "tampere",
-  APP_VERSION: "0.16.5",
+  APP_VERSION: "0.16.6",
   MODEL_VERSION: "2026.11.16",
   SCHEMA_VERSION: 3,
 

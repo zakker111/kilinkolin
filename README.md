@@ -4,7 +4,7 @@ An **estimated crowd-flow heat map** for events in Tampere: pick a day, drag the
 where the estimated crowd is on the streets at that moment. The map is the answer; the panel
 names what is on.
 
-Live: https://zakker111.github.io/kilinkolin/ · **v0.16.5** · model **2026.11.16** · schema **3**
+Live: https://zakker111.github.io/kilinkolin/ · **v0.16.6** · model **2026.11.16** · schema **3**
 
 ## What it does
 
@@ -27,7 +27,8 @@ Live: https://zakker111.github.io/kilinkolin/ · **v0.16.5** · model **2026.11.
   community grey. Tap or click a dot for its title, time and venue.
 - **Phone layout** — the page detects a phone (`html.is-mobile`) from a narrow or coarse-pointer
   viewport, uses a 50dvh map, a compact legend, larger phone type and touch targets, and
-  safe-area padding, and never scrolls sideways.
+  safe-area padding, and never scrolls sideways. On phones, **Why this number?** opens in a
+  bottom sheet so the event list keeps its place; desktop keeps the inline disclosure.
 - Pan, wheel-zoom and ± buttons on the map itself.
 
 Every number is an estimate: `≈`, with a range. There is no tracking, no personal data and no

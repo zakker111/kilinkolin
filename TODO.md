@@ -2,6 +2,8 @@
 
 ## Done
 
+- [x] 0.16.6 mobile Why sheet and address provenance: bottom-sheet explanation, one-scroll phone
+      panel, cached day-data fallback and official Metso/Megazone/Valkeakoski addresses
 - [x] 0.16.5 mobile typography and robustness: larger phone type, keyboard event rows, day-bundle
       fallback, safe timestamp parsing and sanitized Why-panel ids
 - [x] Repo scaffold: MIT licence, NOTICE, AGENTS, README, VERSIONS

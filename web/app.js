@@ -15,6 +15,7 @@
   let dayIndex = new Map();
   let selectedId = null;
   let CALIBRATION = null;
+  let sheetTrigger = null;
 
   const esc = (s) => String(s == null ? "" : s)
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -139,8 +140,10 @@
     const timeNote = timeUnknown
       ? "Start time not published; heat spread over 18:00–20:00. "
       : "";
-    const whyId = "why-" + String(ev.id).replace(/[^A-Za-z0-9_-]/g, "_");
+    const whyId = "why-" + ev.id;
     const noCapacity = !!(ev.basis && ev.basis.capacity_unknown);
+    const whyLabel = noCapacity ? "Why no estimate?" : "Why this number?";
+    const why = ev.basis ? whyMarkup(ev) : "";
     box.className = "panel-detail on";
     box.innerHTML =
       `<div class="pd-title">${esc(ev.title)}</div>` +
@@ -149,21 +152,53 @@
       `<div class="pd-meta"><span class="cat cat-${esc(ev.category)}">${esc(CAT_LABEL[ev.category] || "Event")}</span>` +
       `${ev.mid != null ? `<span class="pd-est">≈ ${ev.mid.toLocaleString("fi-FI")} people, estimated</span>` : noCapacity ? `<span class="pd-est">No crowd estimate · capacity unpublished</span>` : ""}</div>` +
       `<div class="pd-note">${timeNote}${noCapacity ? "Capacity is unpublished, so no crowd estimate is shown." : "Estimate, not a measurement."}</div>` +
-      (ev.basis ? `<button class="pd-why-btn" type="button" aria-expanded="false" aria-controls="${esc(whyId)}">${noCapacity ? "Why no estimate?" : "Why this number?"}</button>` + whyMarkup(ev, whyId) : "");
+      (ev.basis ? `<button class="pd-why-btn" type="button" aria-expanded="false" ${IS_MOBILE ? `aria-haspopup="dialog" aria-controls="whySheet"` : `aria-controls="${esc(whyId)}"`}>${whyLabel}</button>` +
+        (IS_MOBILE ? "" : `<div class="pd-why" id="${esc(whyId)}" hidden>${why}</div>`) : "");
     const whyBtn = box.querySelector(".pd-why-btn");
     if (whyBtn) {
       whyBtn.addEventListener("click", () => {
-        const panel = whyBtn.nextElementSibling;
+        if (IS_MOBILE) {
+          openWhySheet(ev, why, whyBtn);
+          return;
+        }
+        const panel = $(whyId);
         if (!panel) return;
         const open = panel.hidden;
         panel.hidden = !open;
         whyBtn.setAttribute("aria-expanded", String(open));
-        whyBtn.textContent = open ? "Hide the working" : (noCapacity ? "Why no estimate?" : "Why this number?");
+        whyBtn.textContent = open ? "Hide the working" : whyLabel;
       });
     }
   }
 
-  function whyMarkup(ev, whyId) {
+  function openWhySheet(ev, content, trigger) {
+    const sheet = $("whySheet");
+    if (!sheet) return;
+    $("whySheetTitle").textContent = ev.basis && ev.basis.capacity_unknown ? "Why no estimate?" : "Why this number?";
+    $("whySheetEvent").textContent = ev.title;
+    $("whySheetBody").innerHTML = content;
+    sheetTrigger = trigger;
+    trigger.setAttribute("aria-expanded", "true");
+    sheet.showModal();
+    document.body.classList.add("sheet-open");
+    $("whySheetClose").focus({ preventScroll: true });
+  }
+
+  function wireWhySheet() {
+    const sheet = $("whySheet");
+    if (!sheet) return;
+    $("whySheetClose").addEventListener("click", () => sheet.close());
+    sheet.addEventListener("click", (e) => { if (e.target === sheet) sheet.close(); });
+    sheet.addEventListener("close", () => {
+      document.body.classList.remove("sheet-open");
+      if (!sheetTrigger) return;
+      sheetTrigger.setAttribute("aria-expanded", "false");
+      sheetTrigger.focus({ preventScroll: true });
+      sheetTrigger = null;
+    });
+  }
+
+  function whyMarkup(ev) {
     const b = ev.basis || {};
     const att = ev.attendance || {};
     const cal = CALIBRATION || {};
@@ -210,14 +245,12 @@
       : `<div class="why-row"><span>Fill</span><span><b>${pct(b.fill)}</b><small>${esc(b.fill_source || "category prior")}</small></span></div>` +
         `<div class="why-row"><span>Interest</span><span><b>${n(b.interest)}/100</b><small>${signals}</small></span></div>` +
         `<div class="why-row"><span>Band</span><span><b>≈ ${n(att.low)}–${n(att.high)}</b><small>mid ${n(att.mid)}; ±${pct(b.spread)}</small></span></div>`;
-    return `<div class="pd-why" id="${esc(whyId)}" hidden>` +
-      `<div class="why-row"><span>Capacity</span><span><b>${noCapacity ? "not published" : n(b.capacity)}</b><small>${esc(b.capacity_source || "unknown")}</small></span></div>` +
+    return `<div class="why-row"><span>Capacity</span><span><b>${noCapacity ? "not published" : n(b.capacity)}</b><small>${esc(b.capacity_source || "unknown")}</small></span></div>` +
       workingRows +
       collisionLine +
       compLine +
       `<div class="why-note">${noCapacity ? "No capacity means no attendance band; the event is listed but adds no heat." : test}</div>` +
-      `<div class="why-note">${cityLine}</div>` +
-      `</div>`;
+      `<div class="why-note">${cityLine}</div>`;
   }
 
   function markRow(id) {
@@ -352,6 +385,7 @@
     renderStatus(data);
     renderFoot(data);
     CALIBRATION = data.calibration || null;
+    wireWhySheet();
     const events = toEvents(data.events || []);
     const days = buildDays(events);
 

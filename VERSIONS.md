@@ -2,6 +2,22 @@
 
 ## App
 
+### 0.16.6 — 2026-11-17
+Refine the phone event panel and finish the venue address provenance.
+
+- Changed: on phones, **Why this number?** opens in a modal bottom sheet instead of expanding the
+  event panel. The sheet has its own scroll area, closes via Close, Escape or the backdrop, and
+  returns focus to the trigger; desktop keeps the inline disclosure.
+- Changed: the phone event panel is one `50dvh` scroll area with no nested detail/list caps, so the
+  event rows keep their place while the explanation is open.
+- Changed: initial and day-switch flow loading share one fallback helper; after a missing day
+  bundle, the full `flows.json` + `routes.json` pair is cached and reused instead of re-fetched.
+- Changed: redundant phone type overrides were removed, and Metso is marked `approx: false`.
+  Megazone (Hammareninkatu 6) and Valkeakosken kesäteatteri (Pässinmäenkatu 30) were checked
+  against their official pages and now carry official sources.
+- Verified: 390×844 sheet and focus checks, desktop inline disclosure, validator 0 errors (1 known
+  straight-line warning) and 26 Python tests.
+
 ### 0.16.5 — 2026-11-17
 Increase phone legibility and harden the event-selection and fallback paths.
 

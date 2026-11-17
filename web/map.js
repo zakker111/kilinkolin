@@ -19,7 +19,7 @@
               heatShapes: null, labelShapes: [], shapes: [], zooming: false, scrubbing: false,
               worker: undefined, heatRequestId: 0, heatPendingKey: null, heatRequestMeta: null,
               dayList: [], sortedLegs: null, sortedLegsVersion: -1,
-              sortedVenues: null, sortedVenuesVersion: -1 };
+              sortedVenues: null, sortedVenuesVersion: -1, fullFlows: false };
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
@@ -921,6 +921,26 @@
     resetHeat();
   }
 
+  /* One fallback path for both first load and later day changes. Once the full
+     bundle is loaded, keep using it instead of retrying a missing day file. */
+  async function loadFlows(day) {
+    if (S.fullFlows) return true;
+    try {
+      await loadDay(day);
+      return true;
+    } catch (err) {
+      console.warn("per-day flow data unavailable, using full bundle", err);
+    }
+    try {
+      await loadAllFlows();
+      S.fullFlows = true;
+      return true;
+    } catch (err) {
+      console.error("flow data failed", err);
+      return false;
+    }
+  }
+
   async function init(events) {
     S.events = events || [];
     wire();
@@ -929,17 +949,10 @@
     try {
       const venues = await fetch("./geo/venues.json").then((r) => r.json());
       (venues.venues || []).forEach((v) => { S.venues[v.id] = v; });
-      if (S.day) {
-        try {
-          await loadDay(S.day);
-        } catch (err) {
-          console.warn("per-day flow data unavailable, using full bundle", err);
-          await loadAllFlows();
-        }
-      }
     } catch (err) {
-      console.error("flow data failed", err);
+      console.error("venue data failed", err);
     }
+    if (S.day) await loadFlows(S.day);
 
     S.map = new TileMap($("mapCanvas"));
     S.map.paint = paintFlow;
@@ -1001,17 +1014,7 @@
       if (S.hideTip) S.hideTip();
       S.hoverId = null;
       if (S.onHover) S.onHover(null);
-      try {
-        await loadDay(day);
-      } catch (err) {
-        console.warn("per-day flow data unavailable, using full bundle", err);
-        try {
-          await loadAllFlows();
-        } catch (fallbackErr) {
-          console.error("day flow data failed", fallbackErr);
-          return null;
-        }
-      }
+      if (!(await loadFlows(day))) return null;
       S.day = day;
       S.minutes = peakMinute(day);
       refresh();
