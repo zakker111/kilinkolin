@@ -903,6 +903,7 @@
     const res = await fetch(`./geo/days/${encodeURIComponent(day)}.json`);
     if (!res.ok) throw new Error(`day ${day}: HTTP ${res.status}`);
     const doc = await res.json();
+    if (!doc || !Array.isArray(doc.events)) throw new Error(`day ${day}: bundle has no events`);
     S.flows = {};
     S.routes = doc.routes || {};
     (doc.events || []).forEach((flow) => { S.flows[flow.id] = flow; });
