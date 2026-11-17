@@ -2,6 +2,46 @@
 
 ## App
 
+### 0.16.5 — 2026-11-17
+Increase phone legibility and harden the event-selection and fallback paths.
+
+- Changed: phone-specific type sizes raised across the header, day strip, estimate card, legend,
+  event list, detail and footer. The event panel gets a little more vertical room, and the map
+  zoom buttons grow to 40 px. Desktop typography is unchanged.
+- Fixed: event rows are now keyboard-focusable buttons; Enter and Space select the event.
+- Fixed: a missing per-day bundle now falls back to the full `flows.json` + `routes.json` pair when
+  switching days, matching the initial-load fallback instead of leaving the old day on screen.
+- Fixed: generated timestamps are converted to a valid ISO value before the stale badge is set,
+  and the "Why" panel id is sanitized before it is used in markup or lookup.
+- Verified: phone checks at 390×844 and 320×568 with no sideways scroll, desktop at 1280×900,
+  keyboard Enter selection, a 404 day-bundle fallback, 0 validator errors (1 known straight-line
+  warning) and 26 Python tests. Browser console is clean.
+
+### 0.16.4 — 2026-11-16
+Audit Tampere venue capacities against LiveFIN and keep unpublished rooms unknown.
+
+- Changed: corrections from LiveFIN's open Venuelista (retrieved 2026-11-16): Tampere-talo
+  1800→1952, Tavara-asema 1000→1200, TTT-klubi 300→230, Maanalainen 150→70, Vastavirta
+  200→100, Public House Huurre 120→90, Paapan Kapakka 90→110, Bar Kotelo 0→200,
+  Viihdemaailma Ilona 700→1000, and Yo-talo 900→400 (LiveFIN records live music ended
+  2024-05-31).
+- Changed: Tullikamari split into Klubi (450) and Pakkahuone (1200). Generic "Tullikamari"
+  feed names stay on Klubi because the room is not published.
+- Changed: Sin City is a real venue with no published capacity. MerirosvoKolmiot resolves to
+  **Sin City + H5 Bar**, not H5 alone; H5's 150 seats are recorded but never used as the
+  combined capacity.
+- Changed: a venue with `capacity_unknown` publishes no attendance number and no heat:
+  `attendance.mid/high/spread` and `basis.capacity` are null, `basis.capacity_unknown` is true,
+  and `data.json.calibration.capacity_unknown` counts them. Kide rows at H5 consult the product
+  detail place, so a list place of "H5 Bar" cannot hide Sin City.
+- Kept: Telakka (local 400 vs LiveFIN 120) and F54 (300 vs LiveFIN Fame Club 850) unchanged;
+  the active theatre/club room and successor relationship are not confirmed.
+- Model 2026.11.16, schema 3. Verified: 565 events, 156 venues, 2 unknown-capacity events,
+  300 discounted events (median factor 0.993, discounted range 0.439–0.998), 6 shared groups
+  covering 14 events, 22 TBA flows, 48 published city caps, 0 validator errors (1 known warning:
+  2 straight-line corridors) and 26 Python tests. Playwright could not launch in this container
+  because `libnspr4.so` is missing; that is an environment limitation, not a test result.
+
 ### 0.16.3 — 2026-11-16
 Load only the selected day and keep heat rendering off the main thread.
 
@@ -643,10 +683,11 @@ First working build.
 
 ## Data & model
 
-- `model_version`: **2026.11.11** — Liiga-fitted hockey fill, other categories use priors;
+- `model_version`: **2026.11.16** — Liiga-fitted hockey fill, other categories use priors;
   gravity β = 1.6, impedance from distance/speed approximation, class-based mode adjustment;
   event capacity from published participant counts and Kide practice keywords, a venue-size
   class prior, district transit corridors, and a real end minute when the source publishes one.
+  A venue marked `capacity_unknown` publishes no attendance estimate instead of a class prior.
   A competition prior pools a shared top-zone catchment once for same-day events whose active
   windows overlap by at least 50% of their smaller catchment share. Unknown starts are averaged
   over 18:00, 19:00 and 20:00 instead of a single 19:00 peak. A venue/date/published-start

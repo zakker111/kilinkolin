@@ -20,7 +20,7 @@ Not a fork of Tampere Keikat — it reads that project's published feed. See `NO
 
 `APP_VERSION` lives in `web/config.js`. Every release also gets a top entry in `VERSIONS.md`, a
 line in `README.md` and a note in `TODO.md`; keep those in step when the site changes.
-`MODEL_VERSION` (currently 2026.11.11) lives in `scripts/build.py` and `web/config.js` and changes
+`MODEL_VERSION` (currently 2026.11.16) lives in `scripts/build.py` and `web/config.js` and changes
 only when the model does. `SCHEMA_VERSION` is 3; event positions 0–6 are still frozen.
 
 ## Hard rules
@@ -84,8 +84,9 @@ is not `OFF` or if a published title contains `SAMPLE`. Never ship a placeholder
   "events": [["date","time","title","venue","genre","free","url",
               "id","kind","category","sub","interest","attendance","sample","venue_id"]] }
 ```
-Indices 0–6 are frozen (older consumers read them positionally). Append only. An empty `time`
-means the source published no start. The UI must label it TBA, and the heat must not be pinned
+Indices 0–6 are frozen (older consumers read them positionally). Append only. Index 12
+(`attendance`) is null only for a `capacity_unknown` flow; treat null as no estimate, never as
+zero. An empty `time` means the source published no start. The UI must label it TBA, and the heat must not be pinned
 to 19:00: the flow carries `start_options` (18:00, 19:00, 20:00) and `start_window`
 ("18:00–20:00"), and the browser averages the arrival/egress curves over those candidate
 starts. The row's empty time is never filled in to look published.
@@ -96,8 +97,9 @@ routes those flows reference, keyed by `venue|hub:*` / `venue|zone:*`. It also c
 selected day's bundle; `geo/flows.json` and `geo/routes.json` stay complete for validation and
 the route/data gates, and are the fallback when a day bundle cannot be fetched.
 
-`web/geo/flows.json`: per event `attendance{low,mid,high,spread}`,
-`interest{score,band,signals}`, `basis{capacity,capacity_source,fill,fill_source,interest,
+`web/geo/flows.json`: per event `attendance{low,mid,high,spread}` (or a null band with
+`unknown:true` when the venue capacity is unpublished), `interest{score,band,signals}`,
+`basis{capacity,capacity_unknown,capacity_source,fill,fill_source,interest,
 spread,published_max_participants,competition{factor,peers},
 venue_collision{group_size,venue_capacity,combined_mid_before,combined_mid_after,factor,room_split}}`,
 `start_known`, `zones[]` (share
@@ -121,6 +123,12 @@ factor and then by the venue-collision allocation.
 - Capacity provenance must be explicit: `city calendar maxParticipants`, `venue registry sport
   capacity`, `venue registry gig capacity`, or the 20-seat floor. Do not use an arena's concert
   capacity for a hockey game.
+- A venue with `capacity_unknown: true` has no published hall size. `venue_capacity()` returns 0
+  and `event_capacity()` returns None unless the event carries a published `maxParticipants`.
+  Its flow publishes `attendance{low:null,mid:null,high:null,spread:null,unknown:true}` and
+  `basis{capacity:null,capacity_unknown:true,capacity_source:<note>}`. The event stays in the day
+  list but adds no heat; it never inherits the 20-seat floor or another room's capacity. Count
+  these events in `data.json.calibration.capacity_unknown`.
 - `validate.py` must fail if an event's capacity or mid estimate exceeds a published
   `maxParticipants` cap, if the coverage count disagrees with the flows, if two rows have the
   same venue/date/title/start, or if the calibration block is malformed.
@@ -191,7 +199,8 @@ Route geometry is cached by venue ID, not by coordinate. When a venue moves, del
 `venue|hub:*` and `venue|zone:*` keys from `registry/routes.json`, rebuild so `flows.json`
 carries the new point, run `scripts/routes.py --from-flow`, then rebuild and validate.
 Capacity for a venue nobody publishes a hall size for stays a class prior; say so in `VERSIONS.md`
-rather than presenting it as published.
+rather than presenting it as published. A venue explicitly marked `capacity_unknown` instead
+publishes no estimate at all (Sin City is the current case); do not give it a class prior.
 
 ### Student parties
 
@@ -203,6 +212,8 @@ only when the street has a number and the point is in the Tampere region. Vague 
 (`Tampereen seutu`) and postal boxes (`PL 54`) are dropped and logged, never guessed. After
 `kide_rows` adds one of these generated venues, rebuild the alias index before resolving the
 student rows. The same event sold separately by four guilds is merged on (date, start, title).
+A venue marked `prefer_detail_place` (H5) always consults the product detail, because the list
+place can name one room while the event is at several (H5 Bar vs Sin City + H5).
 
 ## Adding a feed adapter
 

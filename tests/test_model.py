@@ -191,6 +191,15 @@ class ModelTest(unittest.TestCase):
             "city calendar maxParticipants, capped by the venue's capacity",
         )
 
+    def test_unknown_capacity_is_not_floored_to_twenty(self):
+        unknown = {**VENUE, "capacity": {"sport": 0, "gig": 0},
+                   "capacity_unknown": True, "capacity_source": "capacity unpublished"}
+        event = {"category": "student"}
+        self.assertEqual(build.venue_capacity(unknown, "student"), 0)
+        self.assertIsNone(build.event_capacity(event, unknown))
+        self.assertIn("no estimate", build.capacity_source(event, unknown))
+        self.assertEqual(build.event_capacity({"category": "community", "max_participants": 80}, unknown), 80)
+
     def test_exact_duplicate_is_merged_and_metadata_filled(self):
         def event(title, time, venue_id, url=""):
             return {"date": "2026-12-05", "time": time, "title": title,

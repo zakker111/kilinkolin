@@ -2,8 +2,12 @@
 
 ## Done
 
+- [x] 0.16.5 mobile typography and robustness: larger phone type, keyboard event rows, day-bundle
+      fallback, safe timestamp parsing and sanitized Why-panel ids
 - [x] Repo scaffold: MIT licence, NOTICE, AGENTS, README, VERSIONS
 - [x] Venue registry — 46 Tampere venues, coordinates, capacities, areas, hubs
+- [x] Audited Tampere capacities against LiveFIN's Venuelista on 2026-11-16; split Tullikamari
+      Klubi/Pakkahuone and kept Sin City unknown instead of inheriting H5's 150 seats
 - [x] Zone registry — 26 districts + 13 municipalities/Pirkanmaa bands
 - [x] Pipeline: music feed ingest, venue alias resolution, taxonomy, crowd class
 - [x] Interest score with signal breakdown

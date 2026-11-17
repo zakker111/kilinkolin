@@ -4,7 +4,7 @@ An **estimated crowd-flow heat map** for events in Tampere: pick a day, drag the
 where the estimated crowd is on the streets at that moment. The map is the answer; the panel
 names what is on.
 
-Live: https://zakker111.github.io/kilinkolin/ · **v0.16.3** · model **2026.11.11** · schema **3**
+Live: https://zakker111.github.io/kilinkolin/ · **v0.16.5** · model **2026.11.16** · schema **3**
 
 ## What it does
 
@@ -26,8 +26,8 @@ Live: https://zakker111.github.io/kilinkolin/ · **v0.16.3** · model **2026.11.
 - **Event dots** — gigs red, sports blue, student parties amber, stage purple, culture teal and
   community grey. Tap or click a dot for its title, time and venue.
 - **Phone layout** — the page detects a phone (`html.is-mobile`) from a narrow or coarse-pointer
-  viewport, uses a 50dvh map, a compact legend, larger touch targets and safe-area padding, and
-  never scrolls sideways.
+  viewport, uses a 50dvh map, a compact legend, larger phone type and touch targets, and
+  safe-area padding, and never scrolls sideways.
 - Pan, wheel-zoom and ± buttons on the map itself.
 
 Every number is an estimate: `≈`, with a range. There is no tracking, no personal data and no
@@ -84,7 +84,7 @@ independent estimate. The assumptions are deliberately explicit:
 
 This is a **prior, not a fitted or measured substitution model**. It scales the attendance band,
 street legs, corridors and map dots together so the panel and the heat agree. The current build
-discounts 305 of 567 events (median factor 0.992 over all events, range 0.439–0.998); a discount
+discounts 300 of 565 events (median factor 0.993 over all events, range 0.439–0.998); a discount
 appears in the panel only when the factor is below 0.999, labelled "shared demand, not a measured
 split".
 
@@ -107,6 +107,16 @@ covering 14 events; none currently exceeds its capacity (0 capped groups), and a
 are unresolved. A synthetic three-event model test covers the over-cap proportional allocation.
 The event panel shows a **Venue split** row for these events, including when the group already
 fits, so an unresolved shared building is never mistaken for independent rooms.
+
+### Unknown venue capacity
+
+A venue whose hall size nobody publishes is marked `capacity_unknown` in the registry; it does
+not inherit the 20-seat model floor or another room's capacity. These events stay in the day list
+with their capacity source, but publish no attendance number and add no heat. `attendance.mid`,
+`high` and `spread` are `null`, `basis.capacity` is `null`, and `basis.capacity_unknown` is true;
+`data.json.calibration.capacity_unknown` counts them. The current build has two: **Sin City** and
+the combined **Sin City + H5 Bar**. H5's 150 seats are recorded as known, but they are not used as
+the combined capacity.
 
 ### Unknown starts
 
@@ -147,7 +157,7 @@ python3 -m http.server -d web 3003      # preview at http://localhost:3003
 cd tests && npm ci && npx playwright install chromium && npm test
 ```
 
-The suite runs 17 Python model tests for calibration states, cap edges, dedupe, missing-time
+The suite runs 18 Python model tests for calibration states, cap edges, dedupe, missing-time
 handling, TBA start options, competition cases and venue-collision allocation, plus 8 Python
 tests for the route-coverage and data-churn gates. It then runs 14 Playwright checks: switching
 days, both ends of the hour slider, tapping a real map dot, duplicate-free data, TBA labels and
@@ -172,7 +182,8 @@ No map key or secret is required: the basemap is OpenStreetMap raster tiles. Opt
 ## Honesty
 
 Venue points are OpenStreetMap address points where available; points that are approximate are
-flagged. Capacities nobody publishes are class priors. Only Liiga hockey has reported
+flagged. Capacities nobody publishes are class priors, except venues marked `capacity_unknown`
+(Sin City), which publish no estimate rather than a prior. Only Liiga hockey has reported
 attendance for a backtest; every other category keeps a prior rather than pretending to be
 calibrated, the competition factor is a sharing prior rather than a measured split, the venue
 collision cap shares one building without claiming a room allocation, and the TBA start window is

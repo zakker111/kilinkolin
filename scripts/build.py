@@ -30,7 +30,7 @@ WEB = os.path.join(ROOT, "web")
 GEO = os.path.join(WEB, "geo")
 
 KEIKAT_URL = "https://zakker111.github.io/tampere-keikat/data.json"
-MODEL_VERSION = "2026.11.11"
+MODEL_VERSION = "2026.11.16"
 SCHEMA_VERSION = 3
 FLOWS_SCHEMA_VERSION = 2
 COMPETITION_FLOOR = 0.05  # no event loses more than 95% of its independent demand
@@ -400,12 +400,17 @@ def venue_capacity(venue, category):
 
     An arena's concert capacity is not its hockey capacity. Using the larger number for a
     Liiga game inflated every hockey estimate; the registry carries both, so pick the one
-    that matches the event instead of taking the maximum.
+    that matches the event instead of taking the maximum. A venue whose capacity is marked
+    unknown returns 0 instead of the 20-seat floor: the floor is for a small room, not for
+    a large room whose size nobody published.
     """
+    if venue.get("capacity_unknown"):
+        return 0
     sport = int(venue["capacity"].get("sport", 0) or 0)
     if category == "sports" and sport > 0:
         return max(sport, 20)
-    return max(int(venue["capacity"].get("gig", 0) or 0), 20)
+    gig = int(venue["capacity"].get("gig", 0) or 0)
+    return gig if gig > 0 else 20
 
 
 def event_capacity(e, venue):
@@ -418,14 +423,18 @@ def event_capacity(e, venue):
       * Kide title keywords for student events (``treenit``/practice -> a small group,
         ``sitsit``/``gaala``/party -> the venue's capacity);
       * otherwise the venue's capacity prior (existing behaviour).
-    Missing input keeps the venue prior rather than inventing a number.
+    Missing input keeps the venue prior rather than inventing a number. A venue marked
+    ``capacity_unknown`` with no per-event cap returns None; the build then publishes no
+    attendance estimate for it rather than using the small-room floor.
     """
-    venue_cap = venue_capacity(venue, e.get("category"))
     mp = e.get("max_participants")
+    venue_cap = venue_capacity(venue, e.get("category"))
     if isinstance(mp, int) and mp > 0:
         # The 20-seat floor is a model prior for unknown venues. Applying it to a
         # published cap would make the capacity exceed maxParticipants.
-        return min(mp, venue_cap)
+        return min(mp, venue_cap) if venue_cap > 0 else mp
+    if venue.get("capacity_unknown"):
+        return None
     title_l = (e.get("title") or "").lower()
     if e.get("category") == "student" or e.get("kind") == "student":
         practice_kw = ("treenit", "treeni", "harjoitus", "harjoitukset", "practice",
@@ -505,9 +514,14 @@ def capacity_source(e, venue):
     mp = e.get("max_participants")
     venue_cap = venue_capacity(venue, e.get("category"))
     if isinstance(mp, int) and mp > 0:
+        if venue.get("capacity_unknown"):
+            return "city calendar maxParticipants (venue capacity unpublished)"
         if mp > venue_cap:
             return "city calendar maxParticipants, capped by the venue's capacity"
         return "city calendar maxParticipants"
+    if venue.get("capacity_unknown"):
+        note = venue.get("capacity_source") or "venue capacity unpublished"
+        return note + "; no estimate"
     if e.get("category") == "sports" and int(venue["capacity"].get("sport", 0) or 0) > 0:
         return "venue registry sport capacity"
     if int(venue["capacity"].get("gig", 0) or 0) > 0:
@@ -801,7 +815,7 @@ def competition_factor(flow, peers):
     compete.
     """
     start, end = flow.get("start"), flow.get("end")
-    demand = max(1.0, float((flow.get("attendance") or {}).get("mid", 0.0)))
+    demand = max(1.0, float((flow.get("attendance") or {}).get("mid") or 0.0))
     if start is None or end is None or end <= start:
         return 1.0, 0
     duration = max(1.0, end - start)
@@ -817,7 +831,7 @@ def competition_factor(flow, peers):
         shared = catchment_overlap(flow.get("zones"), other.get("zones"))
         if shared < COMPETITION_MIN_OVERLAP:
             continue
-        other_demand = max(1.0, float((other.get("attendance") or {}).get("mid", 0.0)))
+        other_demand = max(1.0, float((other.get("attendance") or {}).get("mid") or 0.0))
         exposures.append((other_demand, temporal * shared))
     if not exposures:
         return 1.0, 0
@@ -845,8 +859,16 @@ def kide_rows(alias_idx):
     rows, skipped = [], Counter()
     for ev in events:
         venue = resolve_venue(ev["place"], alias_idx, VENUES)
-        if not venue or venue["id"] == "tampere_muu":
+        detail = None
+        if not venue or venue.get("prefer_detail_place"):
             detail = kide_feed.fetch_detail(ev.get("product_id"))
+        if detail:
+            # The list place can be a building name that hides the other venue in
+            # the same event ("H5 Bar" for an event actually at Sin City + H5).
+            detail_venue = resolve_venue(detail.get("place"), alias_idx, VENUES)
+            if detail_venue and detail_venue["id"] != "tampere_muu":
+                venue = detail_venue
+        if not venue or venue["id"] == "tampere_muu":
             venue = kide_detail_venue(ev, detail)
         if not venue or venue["id"] == "tampere_muu":
             skipped[ev["place"] or "(no place)"] += 1
@@ -1163,13 +1185,20 @@ def build(mode="full", with_samples=False):
     for i, e in enumerate(events):
         venue = e["venue"]
         cap = event_capacity(e, venue)
-        interest = interest_score(e, cap, e["category"], e["sub"], venue)
-        att = attendance_est(cap, e["category"], e["sub"], interest, e)
+        unknown_capacity = cap is None
+        calc_cap = cap or 0
+        interest = interest_score(e, calc_cap, e["category"], e["sub"], venue)
+        if unknown_capacity:
+            # No capacity is published for this venue. Publish the event and its
+            # provenance, but no invented attendance number and no heat.
+            att = {"low": None, "mid": None, "high": None, "spread": None, "unknown": True}
+        else:
+            att = attendance_est(cap, e["category"], e["sub"], interest, e)
         if isinstance(e.get("max_participants"), int) and e["max_participants"] > 0:
             city_capacity["events_with_published_capacity"] += 1
         cls, zone_rows = gravity(e, venue, ZONES)
-        legs = legs_for(venue, zone_rows, ROUTES, HUB_NAMES, HUB_KINDS, att["mid"])
-        corridors = [] if legs else corridors_for(venue, zone_rows, hubs, att["mid"])
+        legs = legs_for(venue, zone_rows, ROUTES, HUB_NAMES, HUB_KINDS, att["mid"] or 0)
+        corridors = [] if legs else corridors_for(venue, zone_rows, hubs, att["mid"] or 0)
         modes = summarise_modes(zone_rows, cls)
         eid = f"e{i:04d}"
         by_cat[e["category"]] += 1
@@ -1201,6 +1230,7 @@ def build(mode="full", with_samples=False):
             "start_known": bool((e.get("time") or "").strip()),
             "basis": {
                 "capacity": cap,
+                "capacity_unknown": unknown_capacity,
                 "capacity_source": capacity_source(e, venue),
                 "fill": round(fill_value(e), 3),
                 "fill_source": fill_source(e, calibration),
@@ -1221,6 +1251,8 @@ def build(mode="full", with_samples=False):
         ev_geo.append({"id": eid, "venue_id": venue["id"], "lat": venue["lat"], "lon": venue["lon"],
                        "date": e["date"], "attendance": att["mid"], "interest": interest["score"]})
 
+    unknown_capacity_events = sum(1 for flow in flows if flow["basis"].get("capacity_unknown"))
+
     # Competition is applied after every event has an independent demand estimate. It
     # scales the whole flow (attendance, legs and corridors) so the panel, dots and heat
     # all use the same adjusted number. See competition_factor() for the assumptions.
@@ -1229,8 +1261,13 @@ def build(mode="full", with_samples=False):
         by_date[e["date"]].append(i)
     competition_events = 0
     for i, e in enumerate(events):
-        peers = [flows[j] for j in by_date[e["date"]] if j != i]
-        factor, peer_count = competition_factor(flows[i], peers)
+        if flows[i]["basis"].get("capacity_unknown"):
+            # An event with no capacity has no demand estimate to pool or discount.
+            factor, peer_count = 1.0, 0
+        else:
+            peers = [flows[j] for j in by_date[e["date"]]
+                     if j != i and not flows[j]["basis"].get("capacity_unknown")]
+            factor, peer_count = competition_factor(flows[i], peers)
         flows[i]["basis"]["competition"] = {
             "factor": round(factor, 3),
             "peers": peer_count,
@@ -1251,6 +1288,8 @@ def build(mode="full", with_samples=False):
     # at the smallest applicable venue capacity and flag an unpublished room split.
     collision_groups = defaultdict(list)
     for i, flow in enumerate(flows):
+        if flow["basis"].get("capacity_unknown"):
+            continue  # no capacity to cap against
         if not flow.get("start_known"):
             continue  # a TBA row has no single published start to collide on
         collision_groups[(flow["venue_id"], events[i]["date"], flow["start"])].append(i)
@@ -1328,6 +1367,12 @@ def build(mode="full", with_samples=False):
         "source": "Tampere city calendar maxParticipants",
         "events_with_published_capacity": city_capacity["events_with_published_capacity"],
         "note": "maxParticipants is a published cap, not realized attendance; it is never used as backtest ground truth.",
+    }
+    calibration["capacity_unknown"] = {
+        "status": "UNPUBLISHED",
+        "events": unknown_capacity_events,
+        "note": "No capacity is published for these venues, so no attendance estimate is "
+                "published. The event stays in the day list with its source note; it adds no heat.",
     }
     data_doc = {
         "generated": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),

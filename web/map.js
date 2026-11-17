@@ -481,7 +481,8 @@
      or heading home after the estimated end. A TBA flow carries several candidate
      starts, so its curves are averaged instead of pinning the heat to one peak. */
   function enRoute(flow, now, startMin) {
-    const mid = Math.max(0, flow.attendance.mid);
+    const mid = Number(flow.attendance && flow.attendance.mid);
+    if (!Number.isFinite(mid) || mid <= 0) return 0;
     const starts = (flow.start_options && flow.start_options.length)
       ? flow.start_options : [startMin];
     const base = flow.start != null ? flow.start : startMin;
@@ -1003,8 +1004,13 @@
       try {
         await loadDay(day);
       } catch (err) {
-        console.error("day flow data failed", err);
-        return null;
+        console.warn("per-day flow data unavailable, using full bundle", err);
+        try {
+          await loadAllFlows();
+        } catch (fallbackErr) {
+          console.error("day flow data failed", fallbackErr);
+          return null;
+        }
       }
       S.day = day;
       S.minutes = peakMinute(day);

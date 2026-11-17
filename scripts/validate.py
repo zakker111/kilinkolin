@@ -197,27 +197,45 @@ def main():
         if f.get("venue_id") not in venue_ids:
             errors.append(f"flow {fid} venue {f.get('venue_id')!r} not in venues.json")
         att = f.get("attendance", {})
-        if not (att.get("low", 0) <= att.get("mid", 0) <= att.get("high", 0)):
-            errors.append(f"event {f.get('id')} attendance band is inconsistent: {att}")
-        if att.get("spread") is not None and not 0 <= float(att["spread"]) <= 1:
-            errors.append(f"event {f.get('id')} attendance spread is out of range: {att['spread']!r}")
         basis = f.get("basis") or {}
+        capacity_unknown = bool(basis.get("capacity_unknown"))
+        if capacity_unknown:
+            if att.get("mid") is not None or att.get("high") is not None:
+                errors.append(f"event {f.get('id')} has an attendance number despite unknown capacity: {att}")
+            if att.get("low") is not None and (not isinstance(att["low"], int) or att["low"] < 0):
+                errors.append(f"event {f.get('id')} unknown-capacity lower bound is invalid: {att.get('low')!r}")
+            if att.get("spread") is not None:
+                errors.append(f"event {f.get('id')} unknown-capacity spread should be null: {att.get('spread')!r}")
+            if att.get("unknown") is not True:
+                errors.append(f"event {f.get('id')} unknown-capacity flow must be marked unknown")
+        else:
+            if not (att.get("low", 0) <= att.get("mid", 0) <= att.get("high", 0)):
+                errors.append(f"event {f.get('id')} attendance band is inconsistent: {att}")
+            if att.get("spread") is not None and not 0 <= float(att["spread"]) <= 1:
+                errors.append(f"event {f.get('id')} attendance spread is out of range: {att['spread']!r}")
         if not basis:
             warnings.append(f"event {f.get('id')} has no estimate basis")
         else:
             if not 0 <= float(basis.get("fill", -1)) <= 1:
                 errors.append(f"event {f.get('id')} fill is out of range: {basis.get('fill')!r}")
-            if int(basis.get("capacity", 0)) <= 0:
+            if capacity_unknown:
+                if basis.get("capacity") is not None:
+                    errors.append(f"event {f.get('id')} unknown capacity must not carry a number: {basis.get('capacity')!r}")
+                if not (basis.get("capacity_source") or "").strip():
+                    errors.append(f"event {f.get('id')} unknown capacity has no source note")
+            elif int(basis.get("capacity", 0)) <= 0:
                 errors.append(f"event {f.get('id')} basis capacity is not positive")
             mp = basis.get("published_max_participants")
             if mp is not None:
                 published_caps += 1
-                if not isinstance(mp, int) or mp <= 0:
+                if capacity_unknown:
+                    errors.append(f"event {f.get('id')} has a published maxParticipants but an unknown venue capacity")
+                elif not isinstance(mp, int) or mp <= 0:
                     errors.append(f"event {f.get('id')} published maxParticipants is invalid: {mp!r}")
                 else:
                     if int(basis.get("capacity", 0)) > mp:
                         errors.append(f"event {f.get('id')} capacity {basis.get('capacity')} exceeds maxParticipants {mp}")
-                    if int(att.get("mid", 0)) > mp:
+                    if att.get("mid") is not None and int(att["mid"]) > mp:
                         errors.append(f"event {f.get('id')} estimate {att.get('mid')} exceeds maxParticipants {mp}")
             comp = basis.get("competition") or {}
             if comp:
@@ -317,6 +335,14 @@ def main():
             f"city capacity coverage says {city_capacity.get('events_with_published_capacity')!r} "
             f"events but flows publish {published_caps}"
         )
+    capacity_unknown = calibration.get("capacity_unknown") or {}
+    if capacity_unknown:
+        unknown_flows = sum(1 for f in f_events if (f.get("basis") or {}).get("capacity_unknown"))
+        if capacity_unknown.get("events") != unknown_flows:
+            errors.append(
+                f"capacity coverage says {capacity_unknown.get('events')!r} "
+                f"events but {unknown_flows} flows have unknown capacity"
+            )
     if competition and competition.get("events_with_competition") != discounted_flows:
         errors.append(
             f"competition coverage says {competition.get('events_with_competition')!r} "
@@ -325,6 +351,8 @@ def main():
 
     collision_groups = defaultdict(list)
     for f in f_events:
+        if (f.get("basis") or {}).get("capacity_unknown"):
+            continue
         if not f.get("start_known"):
             continue
         event = event_rows.get(f.get("id"))

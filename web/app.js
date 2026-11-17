@@ -139,24 +139,26 @@
     const timeNote = timeUnknown
       ? "Start time not published; heat spread over 18:00–20:00. "
       : "";
-    const whyId = "why-" + ev.id;
+    const whyId = "why-" + String(ev.id).replace(/[^A-Za-z0-9_-]/g, "_");
+    const noCapacity = !!(ev.basis && ev.basis.capacity_unknown);
     box.className = "panel-detail on";
     box.innerHTML =
       `<div class="pd-title">${esc(ev.title)}</div>` +
       `<div class="pd-meta">${esc(time)}${esc(end)} · ${esc(ev.venue)}` +
       `${addr ? " · " + esc(addr) : ""}</div>` +
       `<div class="pd-meta"><span class="cat cat-${esc(ev.category)}">${esc(CAT_LABEL[ev.category] || "Event")}</span>` +
-      `${ev.mid != null ? `<span class="pd-est">≈ ${ev.mid.toLocaleString("fi-FI")} people, estimated</span>` : ""}</div>` +
-      `<div class="pd-note">${timeNote}Estimate, not a measurement.</div>` +
-      (ev.basis ? `<button class="pd-why-btn" type="button" aria-expanded="false" aria-controls="${whyId}">Why this number?</button>` + whyMarkup(ev, whyId) : "");
+      `${ev.mid != null ? `<span class="pd-est">≈ ${ev.mid.toLocaleString("fi-FI")} people, estimated</span>` : noCapacity ? `<span class="pd-est">No crowd estimate · capacity unpublished</span>` : ""}</div>` +
+      `<div class="pd-note">${timeNote}${noCapacity ? "Capacity is unpublished, so no crowd estimate is shown." : "Estimate, not a measurement."}</div>` +
+      (ev.basis ? `<button class="pd-why-btn" type="button" aria-expanded="false" aria-controls="${esc(whyId)}">${noCapacity ? "Why no estimate?" : "Why this number?"}</button>` + whyMarkup(ev, whyId) : "");
     const whyBtn = box.querySelector(".pd-why-btn");
     if (whyBtn) {
       whyBtn.addEventListener("click", () => {
-        const panel = box.querySelector("#" + whyId);
+        const panel = whyBtn.nextElementSibling;
+        if (!panel) return;
         const open = panel.hidden;
         panel.hidden = !open;
         whyBtn.setAttribute("aria-expanded", String(open));
-        whyBtn.textContent = open ? "Hide the working" : "Why this number?";
+        whyBtn.textContent = open ? "Hide the working" : (noCapacity ? "Why no estimate?" : "Why this number?");
       });
     }
   }
@@ -194,6 +196,7 @@
       ? `City calendar: ${n(city.events_with_published_capacity)} event(s) in this build carry a published maxParticipants; ` +
         `capacity is the lower of it and the venue's own capacity. It is not measured attendance.`
       : "City calendar: no event in this build has a published maxParticipants.";
+    const noCapacity = !!b.capacity_unknown;
     const collision = b.venue_collision || {};
     const collisionLine = collision.group_size > 1
       ? `<div class="why-row"><span>Venue split</span><span><b>${collision.factor < 1 ? "×" + Number(collision.factor).toFixed(2) : "shared"}</b><small>${n(collision.group_size)} events at this venue and start; room split not published; combined cap ${n(collision.venue_capacity)}</small></span></div>`
@@ -202,14 +205,17 @@
     const compLine = comp.factor != null && comp.factor < 0.999
       ? `<div class="why-row"><span>Competition</span><span><b>×${Number(comp.factor).toFixed(2)}</b><small>${n(comp.peers)} concurrent event(s) sharing a catchment; shared demand, not a measured split</small></span></div>`
       : "";
-    return `<div class="pd-why" id="${whyId}" hidden>` +
-      `<div class="why-row"><span>Capacity</span><span><b>${n(b.capacity)}</b><small>${esc(b.capacity_source || "unknown")}</small></span></div>` +
-      `<div class="why-row"><span>Fill</span><span><b>${pct(b.fill)}</b><small>${esc(b.fill_source || "category prior")}</small></span></div>` +
-      `<div class="why-row"><span>Interest</span><span><b>${n(b.interest)}/100</b><small>${signals}</small></span></div>` +
-      `<div class="why-row"><span>Band</span><span><b>≈ ${n(att.low)}–${n(att.high)}</b><small>mid ${n(att.mid)}; ±${pct(b.spread)}</small></span></div>` +
+    const workingRows = noCapacity
+      ? `<div class="why-note">No crowd estimate is published: the venue's capacity is unpublished.</div>`
+      : `<div class="why-row"><span>Fill</span><span><b>${pct(b.fill)}</b><small>${esc(b.fill_source || "category prior")}</small></span></div>` +
+        `<div class="why-row"><span>Interest</span><span><b>${n(b.interest)}/100</b><small>${signals}</small></span></div>` +
+        `<div class="why-row"><span>Band</span><span><b>≈ ${n(att.low)}–${n(att.high)}</b><small>mid ${n(att.mid)}; ±${pct(b.spread)}</small></span></div>`;
+    return `<div class="pd-why" id="${esc(whyId)}" hidden>` +
+      `<div class="why-row"><span>Capacity</span><span><b>${noCapacity ? "not published" : n(b.capacity)}</b><small>${esc(b.capacity_source || "unknown")}</small></span></div>` +
+      workingRows +
       collisionLine +
       compLine +
-      `<div class="why-note">${test}</div>` +
+      `<div class="why-note">${noCapacity ? "No capacity means no attendance band; the event is listed but adds no heat." : test}</div>` +
       `<div class="why-note">${cityLine}</div>` +
       `</div>`;
   }
@@ -245,7 +251,7 @@
       const occurring = e.start != null && e.end != null && now >= e.start && now < e.end;
       const soon = e.start != null && !occurring && now >= e.start - 120 && now < e.start;
       const addr = addrOf(e);
-      return `<li class="panelRow${occurring ? " on" : ""}${soon ? " soon" : ""}" data-id="${esc(e.id)}">` +
+      return `<li class="panelRow${occurring ? " on" : ""}${soon ? " soon" : ""}" data-id="${esc(e.id)}" tabindex="0" role="button">` +
         `<span class="pr-time">${esc(e.timeKnown === false ? "TBA" : (e.time || "—"))}</span>` +
         `<span class="pr-body"><span class="pr-title">${esc(e.title)}</span>` +
         `<span class="pr-venue">${esc(e.venue)}${addr ? " · " + esc(addr) : ""}</span></span>` +
@@ -256,6 +262,13 @@
       row.addEventListener("mouseenter", () => { select(id); window.KMap.focusEvent(id); });
       row.addEventListener("mouseleave", () => { if (selectedId === id) window.KMap.focusEvent(null); });
       row.addEventListener("click", () => { select(id); window.KMap.focusEvent(id); });
+      row.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
+          e.preventDefault();
+          select(id);
+          window.KMap.focusEvent(id);
+        }
+      });
       row.addEventListener("focus", () => { select(id); window.KMap.focusEvent(id); });
     });
     renderDetail(selectedId && dayEvents.some((e) => e.id === selectedId) ? selectedId : null);
@@ -276,7 +289,8 @@
 
   function renderStatus(meta) {
     const pill = $("updatedBadge");
-    const age = meta.generated ? (Date.now() - Date.parse(meta.generated.replace(" UTC", "Z"))) / 86400000 : 99;
+    const generated = meta.generated ? Date.parse(meta.generated.replace(" UTC", "Z").replace(" ", "T")) : NaN;
+    const age = Number.isFinite(generated) ? (Date.now() - generated) / 86400000 : 99;
     pill.classList.add(age > 8 ? "stale" : "live");
     pill.querySelector(".status-text").textContent = meta.generated
       ? `Estimated flow model · rebuilt ${stamp(meta.generated)}`

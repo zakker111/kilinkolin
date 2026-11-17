@@ -8,6 +8,7 @@
 <meta name="description" content="Pick a day and an hour: an estimated heat map of where the crowd in Tampere is on its way to events.">
 <link rel="preload" href="./fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="./fonts/bebas-neue-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="icon" href="./favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
@@ -61,8 +62,8 @@
       </div>
 
       <div class="mapZoom">
-        <button id="zoomIn" title="Zoom in">+</button>
-        <button id="zoomOut" title="Zoom out">−</button>
+        <button id="zoomIn" title="Zoom in" aria-label="Zoom in">+</button>
+        <button id="zoomOut" title="Zoom out" aria-label="Zoom out">−</button>
       </div>
       <div class="attrib" id="attrib"></div>
       <div class="mapLoading" id="mapLoading">Loading map…</div>
