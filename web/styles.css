@@ -62,6 +62,11 @@ main{position:relative;z-index:1;max-width:1240px;margin:0 auto;padding:0 16px 2
 .day-mon{font-family:'IBM Plex Mono',monospace;font-size:7.5px;letter-spacing:.06em;text-transform:uppercase;}
 .timeRow{display:flex;align-items:center;gap:9px;background:var(--ink-2);border:1px solid var(--line);
   border-radius:9px;padding:6px 10px;flex:1;min-width:250px;}
+.sparkRow{display:flex;align-items:center;gap:8px;margin-bottom:10px;padding:4px 6px;
+  background:var(--ink-2);border:1px solid var(--line);border-radius:9px;}
+.sparkCap{font-family:'IBM Plex Mono',monospace;font-size:8.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--paper-dim);flex:none;}
+.sparkSvg{flex:1;height:24px;display:block;}
+.sparkPeak{font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--amber);flex:none;white-space:nowrap;}
 .timeCap{font-family:'IBM Plex Mono',monospace;font-size:8.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--paper-dim);}
 .time{flex:1;appearance:none;-webkit-appearance:none;height:26px;background:transparent;cursor:pointer;}
 .time::-webkit-slider-runnable-track{height:4px;border-radius:999px;

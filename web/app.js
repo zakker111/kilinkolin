@@ -16,6 +16,8 @@
   let selectedId = null;
   let CALIBRATION = null;
   let sheetTrigger = null;
+  let sparkPoints = [];
+  let sparkPeakMin = null;
 
   const esc = (s) => String(s == null ? "" : s)
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -116,6 +118,7 @@
     $("timeLabel").textContent = nextDay ? label + " +1" : label;
     $("timeLabel").title = nextDay ? label + " the next morning" : "";
     paintSlider();
+    updateSparkCursor();
   }
 
   /* ------------------------------------------------------- right-hand panel
@@ -421,6 +424,62 @@
       row.addEventListener("focus", () => { select(id); window.KMap.focusEvent(id); });
     });
     renderDetail(selectedId && dayEvents.some((e) => e.id === selectedId) ? selectedId : null);
+    renderSpark();
+  }
+
+  /* -------------------------------------------------------------- day sparkline
+     Total people on routes for each 15-minute slot of the day, read from the same
+     per-event enRoute model the map uses. Shows the crush hour at a glance. */
+  function renderSpark() {
+    const row = $("sparkRow");
+    const svg = $("daySpark");
+    const peakEl = $("sparkPeak");
+    if (!row || !svg) return;
+    if (!dayEvents.length) { row.hidden = true; sparkPoints = []; sparkPeakMin = null; return; }
+    row.hidden = false;
+    const pts = [];
+    let maxP = 0, peakIdx = 0;
+    for (let m = 360; m <= 1800; m += 15) {
+      let total = 0;
+      for (const ev of dayEvents) {
+        total += window.KMap.eventPeople(ev.id, m) || 0;
+      }
+      pts.push({ min: m, total });
+      if (total > maxP) { maxP = total; peakIdx = pts.length - 1; }
+    }
+    sparkPoints = pts;
+    sparkPeakMin = pts[peakIdx].min;
+    const W = 240, H = 32, pad = 2;
+    const n = pts.length;
+    const maxT = maxP > 0 ? maxP : 1;
+    const xs = pts.map((_, i) => (i / (n - 1)) * W);
+    const ys = pts.map((p) => H - pad - (p.total / maxT) * (H - 2 * pad));
+    const line = xs.map((x, i) => `${x.toFixed(1)},${ys[i].toFixed(1)}`).join(" ");
+    const area = `0,${H} ` + xs.map((x, i) => `${x.toFixed(1)},${ys[i].toFixed(1)}`).join(" ") + ` ${W},${H}`;
+    const peakX = xs[peakIdx], peakY = ys[peakIdx];
+    const curMin = +$("timeSlider").value;
+    const curIdx = Math.max(0, Math.min(n - 1, Math.round((curMin - 360) / 15)));
+    const curX = xs[curIdx];
+    const peakLabel = window.KMap.clockLabel(sparkPeakMin) + (sparkPeakMin >= 24 * 60 ? " +1" : "");
+    svg.innerHTML =
+      `<polygon points="${area}" fill="rgba(209,51,25,.12)" />` +
+      `<polyline points="${line}" fill="none" stroke="var(--brick)" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" />` +
+      `<line x1="${curX.toFixed(1)}" y1="0" x2="${curX.toFixed(1)}" y2="${H}" stroke="var(--amber)" stroke-width="1" opacity=".8" />` +
+      `<circle cx="${peakX.toFixed(1)}" cy="${peakY.toFixed(1)}" r="2.6" fill="var(--amber)" stroke="var(--ink-2)" stroke-width="1" />`;
+    if (peakEl) peakEl.textContent = `peak ${peakLabel} · ≈ ${Math.round(maxP).toLocaleString("fi-FI")}`;
+  }
+
+  function updateSparkCursor() {
+    const svg = $("daySpark");
+    if (!svg || !sparkPoints.length) return;
+    const W = 240, H = 32;
+    const n = sparkPoints.length;
+    const curMin = +$("timeSlider").value;
+    const curIdx = Math.max(0, Math.min(n - 1, Math.round((curMin - 360) / 15)));
+    const curX = (curIdx / (n - 1)) * W;
+    // update the cursor line's x
+    const line = svg.querySelector("line");
+    if (line) { line.setAttribute("x1", curX.toFixed(1)); line.setAttribute("x2", curX.toFixed(1)); }
   }
 
   /* time moves do not change any row text, only its on/soon state */
