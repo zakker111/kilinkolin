@@ -149,18 +149,24 @@ test("the mobile Why sheet keeps the panel rows, scrolls, and dismisses", async 
 
   await page.locator("#whySheetClose").click();
   await expect(sheet).toBeHidden();
+  await expect(whyButton).toHaveAttribute("aria-expanded", "false");
   await expect(whyButton).toBeFocused();
-  await page.waitForTimeout(200);
 
-  await whyButton.click({ force: true });
-  await expect(sheet).toBeVisible();
+  await expect(async () => {
+    await whyButton.click();
+    await expect(sheet).toBeVisible();
+  }).toPass({ timeout: 5000 });
   await page.mouse.click(5, 5);
   await expect(sheet).toBeHidden();
+  await expect(whyButton).toHaveAttribute("aria-expanded", "false");
   await expect(whyButton).toBeFocused();
 
-  await whyButton.click();
-  await expect(sheet).toBeVisible();
+  await expect(async () => {
+    await whyButton.click();
+    await expect(sheet).toBeVisible();
+  }).toPass({ timeout: 5000 });
   await page.keyboard.press("Escape");
   await expect(sheet).toBeHidden();
+  await expect(whyButton).toHaveAttribute("aria-expanded", "false");
   await expect(whyButton).toBeFocused();
 });
