@@ -293,19 +293,14 @@
   function openWhySheet(ev, content, trigger) {
     const sheet = $("whySheet");
     if (!sheet) return;
-    try {
-      if (sheet.open) sheet.close();
-      $("whySheetTitle").textContent = ev.basis && ev.basis.capacity_unknown ? "Why no estimate?" : "Why this number?";
-      $("whySheetEvent").textContent = ev.title;
-      $("whySheetBody").innerHTML = content;
-      sheetTrigger = trigger;
-      trigger.setAttribute("aria-expanded", "true");
-      sheet.showModal();
-      document.body.classList.add("sheet-open");
-      $("whySheetClose").focus({ preventScroll: true });
-    } catch (err) {
-      console.error("openWhySheet failed", err);
-    }
+    $("whySheetTitle").textContent = ev.basis && ev.basis.capacity_unknown ? "Why no estimate?" : "Why this number?";
+    $("whySheetEvent").textContent = ev.title;
+    $("whySheetBody").innerHTML = content;
+    sheetTrigger = trigger;
+    trigger.setAttribute("aria-expanded", "true");
+    sheet.showModal();
+    document.body.classList.add("sheet-open");
+    $("whySheetClose").focus({ preventScroll: true });
   }
 
   function wireWhySheet() {

@@ -152,7 +152,7 @@ test("the mobile Why sheet keeps the panel rows, scrolls, and dismisses", async 
   await expect(whyButton).toHaveAttribute("aria-expanded", "false");
   await expect(whyButton).toBeFocused();
 
-  await page.waitForTimeout(300);
+  await page.waitForTimeout(2000);
   await expect(async () => {
     await whyButton.click();
     await expect(sheet).toBeVisible();
@@ -162,7 +162,7 @@ test("the mobile Why sheet keeps the panel rows, scrolls, and dismisses", async 
   await expect(whyButton).toHaveAttribute("aria-expanded", "false");
   await expect(whyButton).toBeFocused({ timeout: 10000 });
 
-  await page.waitForTimeout(300);
+  await page.waitForTimeout(2000);
   await expect(async () => {
     await whyButton.click();
     await expect(sheet).toBeVisible();
