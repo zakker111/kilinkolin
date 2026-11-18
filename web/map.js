@@ -1123,7 +1123,6 @@
           mid: f.attendance ? f.attendance.mid : null,
           attendance: f.attendance || null,
           arrival: f.arrival || null,
-          egress: f.egress || null,
           interest: f.interest || null,
           basis: f.basis || null,
           seed: !!ev.seed,

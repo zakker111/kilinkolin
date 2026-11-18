@@ -177,8 +177,8 @@ away, the phone Why sheet, the day-bundle fallback, a dragged hour slider bringi
 without queueing a raster per step, and a heat worker that never answers falling back to the
 main thread, a shared `#hash` link opening its day, hour, zoom and centre, the play button walking
 the hour forward and pausing again, an event card's walking-directions link and downloaded `.ics`
-(whose UTC start reads back as the card's Helsinki hour), and a card's peak-on-routes / quietest-
-arrival timing line built from the model's own arrival slices. The build workflow runs it before deployment, then
+(whose UTC start reads back as the card's Helsinki hour), and a card's quietest-arrival / peak-
+arrival timing line read straight from the model's own arrival slices. The build workflow runs it before deployment, then
 runs a separate live Pages smoke test after deployment.
 
 ## Deploy

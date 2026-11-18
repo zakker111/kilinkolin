@@ -215,29 +215,17 @@
   }
 
   /* --------------------------------------------------------- arrival timing
-     The model already ships per-event arrival/egress slices; turn them into one
-     honest line: when the crowd on routes peaks, and the quietest arrival. */
+     The model already ships per-event arrival slices (shares by 15-min window);
+     surface the quietest and the peak as one honest line. No recomputation. */
   function arrivalTiming(ev) {
-    if (ev.start == null || !Array.isArray(ev.arrival) || !ev.arrival.length) return null;
-    let quietest = ev.arrival[0], peakArrival = ev.arrival[0];
+    if (!ev.start || !ev.arrival?.length) return null;
+    let quietest = ev.arrival[0], peak = ev.arrival[0];
     for (const s of ev.arrival) {
       if (s.share < quietest.share) quietest = s;
-      if (s.share > peakArrival.share) peakArrival = s;
-    }
-    // peak people actually on routes across the event's span (15-min steps)
-    const end = ev.end != null ? ev.end : ev.start + 120;
-    let peakMin = ev.start, peakVal = -1;
-    for (let m = ev.start - 120; m <= end + 60; m += 15) {
-      const v = window.KMap.eventPeople(ev.id, m);
-      if (v > peakVal) { peakVal = v; peakMin = m; }
+      if (s.share > peak.share) peak = s;
     }
     const clock = (min) => window.KMap.clockLabel(min);
-    return {
-      peakOnRoutes: clock(peakMin),
-      peakVal: peakVal,
-      quietestArrival: clock(ev.start + quietest.t),
-      peakArrival: clock(ev.start + peakArrival.t),
-    };
+    return { quietest: clock(ev.start + quietest.t), peak: clock(ev.start + peak.t) };
   }
 
   function renderDetail(id) {
@@ -267,6 +255,10 @@
         (ev.start != null ? `<button class="pd-act" type="button" data-ics="${esc(ev.id)}">Add to calendar</button>` : "") +
         `</div>`
       : "";
+    const timing = arrivalTiming(ev);
+    const timingLine = timing
+      ? `<div class="pd-arrival">Quietest arrival ≈ ${esc(timing.quietest)}; most arrive ≈ ${esc(timing.peak)}.</div>`
+      : "";
     box.className = "panel-detail on";
     box.innerHTML =
       `<div class="pd-title">${esc(ev.title)}</div>` +
@@ -275,11 +267,7 @@
       `<div class="pd-meta"><span class="cat cat-${esc(ev.category)}">${esc(CAT_LABEL[ev.category] || "Event")}</span>` +
       `${ev.mid != null ? `<span class="pd-est">≈ ${ev.mid.toLocaleString("fi-FI")} people, estimated</span>` : noCapacity ? `<span class="pd-est">No crowd estimate · capacity unpublished</span>` : ""}</div>` +
       `<div class="pd-note">${timeNote}${noCapacity ? "Capacity is unpublished, so no crowd estimate is shown." : "Estimate, not a measurement."}</div>` +
-      (function () {
-        const t = arrivalTiming(ev);
-        if (!t) return "";
-        return `<div class="pd-arrival">On routes peak ≈ ${esc(t.peakOnRoutes)} (≈ ${t.peakVal.toLocaleString("fi-FI")} people). Quietest arrival ≈ ${esc(t.quietestArrival)}.</div>`;
-      })() +
+      timingLine +
       actions +
       (ev.basis ? `<button class="pd-why-btn" type="button" aria-expanded="false" ${IS_MOBILE ? `aria-haspopup="dialog" aria-controls="whySheet"` : `aria-controls="${esc(whyId)}"`}>${whyLabel}</button>` +
         (IS_MOBILE ? "" : `<div class="pd-why" id="${esc(whyId)}" hidden>${why}</div>`) : "");

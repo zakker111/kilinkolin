@@ -541,8 +541,8 @@ test.describe("event card actions", () => {
     // the model's arrival/egress slices surface as one honest timing line
     const arrival = page.locator("#panelDetail .pd-arrival");
     await expect(arrival).toBeVisible();
-    await expect(arrival).toContainText(/On routes peak ≈ \d{2}:\d{2}/);
     await expect(arrival).toContainText(/Quietest arrival ≈ \d{2}:\d{2}/);
+    await expect(arrival).toContainText(/most arrive ≈ \d{2}:\d{2}/);
     expect(await dir.getAttribute("target")).toBe("_blank");
     const href = await dir.getAttribute("href");
     expect(href).toContain("travelmode=walking");
