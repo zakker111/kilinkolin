@@ -235,8 +235,12 @@
       };
       c.addEventListener("pointerup", end);
       c.addEventListener("pointercancel", () => end(null));
-      c.addEventListener("pointerleave", () => {
+      c.addEventListener("pointerleave", (e) => {
         if (drag) return;
+        // a finger lifts straight after a tap, so the touch pointer leaves and
+        // this would undo the selection that tap just made; only a pointer that
+        // can hover should clear the dot it left
+        if (e && e.pointerType === "touch") return;
         S.hoverId = null;
         if (S.hideTip) S.hideTip();
         if (S.onHover) S.onHover(null);

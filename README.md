@@ -4,7 +4,7 @@ An **estimated crowd-flow heat map** for events in Tampere: pick a day, drag the
 where the estimated crowd is on the streets at that moment. The map is the answer; the panel
 names what is on.
 
-Live: https://zakker111.github.io/kilinkolin/ · **v0.16.6** · model **2026.11.16** · schema **3**
+Live: https://zakker111.github.io/kilinkolin/ · **v0.16.7** · model **2026.11.16** · schema **3**
 
 ## What it does
 
@@ -15,7 +15,8 @@ Live: https://zakker111.github.io/kilinkolin/ · **v0.16.6** · model **2026.11.
 - **Day strip + hour scrubber** — 15-minute steps from 06:00 to 06:00 the next day. Moving the
   hour repaints the heat and updates the estimate.
 - **What's on** — the day's events in start order with venue and address, the event under the
-  pointer expanded, and "occurring now" / "soon" marks for the chosen hour.
+  pointer expanded in a card that holds its own slot so the rows never shift, and "occurring
+  now" / "soon" marks for the chosen hour.
 - **Why this number?** — the expanded event shows the capacity and its source, the fill factor,
   the interest signals, the attendance band, the Liiga backtest error, any competition
   discount, and any shared-building venue split. The working is inspectable instead of hidden
@@ -28,7 +29,8 @@ Live: https://zakker111.github.io/kilinkolin/ · **v0.16.6** · model **2026.11.
 - **Phone layout** — the page detects a phone (`html.is-mobile`) from a narrow or coarse-pointer
   viewport, uses a 50dvh map, a compact legend, larger phone type and touch targets, and
   safe-area padding, and never scrolls sideways. On phones, **Why this number?** opens in a
-  bottom sheet so the event list keeps its place; desktop keeps the inline disclosure.
+  bottom sheet so the event list keeps its place, and the tapped event's card stays pinned at the
+  top of the event panel while the rows scroll under it; desktop keeps the inline disclosure.
 - Pan, wheel-zoom and ± buttons on the map itself.
 
 Every number is an estimate: `≈`, with a range. There is no tracking, no personal data and no
@@ -160,10 +162,12 @@ cd tests && npm ci && npx playwright install chromium && npm test
 
 The suite runs 18 Python model tests for calibration states, cap edges, dedupe, missing-time
 handling, TBA start options, competition cases and venue-collision allocation, plus 8 Python
-tests for the route-coverage and data-churn gates. It then runs 14 Playwright checks: switching
-days, both ends of the hour slider, tapping a real map dot, duplicate-free data, TBA labels and
-spread window, capacity caps, the competition and venue-split panel rows, the "Why this number?"
-panel and the Liiga fitted-fill/backtest text. The build workflow runs it before deployment, then
+tests for the route-coverage and data-churn gates. It then runs 21 Playwright checks: switching
+days, both ends of the hour slider, tapping a real map dot with a mouse and with a touch,
+duplicate-free data, TBA labels and spread window, capacity caps, the competition and venue-split
+panel rows, the "Why this number?" panel, the Liiga fitted-fill/backtest text, hovering a row
+without moving the list, tapping a phone row whose card is scrolled away, the phone Why sheet,
+and the day-bundle fallback. The build workflow runs it before deployment, then
 runs a separate live Pages smoke test after deployment.
 
 ## Deploy

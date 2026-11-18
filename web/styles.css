@@ -155,7 +155,7 @@ main{position:relative;z-index:1;max-width:1240px;margin:0 auto;padding:0 16px 2
 .pd-why-btn:hover{border-color:rgba(239,232,216,.55);background:rgba(239,232,216,.11);}
 .pd-why-btn:focus-visible{outline:2px solid var(--amber);outline-offset:2px;}
 .pd-why{margin-top:6px;padding-top:6px;border-top:1px solid rgba(239,232,216,.16);
-  display:grid;gap:4px;max-height:170px;overflow-y:auto;}
+  display:grid;gap:4px;}
 .pd-why[hidden]{display:none;}
 .why-row{display:grid;grid-template-columns:60px minmax(0,1fr);gap:2px 6px;align-items:baseline;}
 .why-row>span:first-child{font-size:8.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--paper-dim);}
@@ -209,6 +209,15 @@ main{position:relative;z-index:1;max-width:1240px;margin:0 auto;padding:0 16px 2
 @media(min-width:1000px){
   .mapRow{grid-template-columns:minmax(0,1fr) 320px;align-items:stretch;}
   .eventPanel{height:min(78vh,760px);}
+  /* The detail card grows from the one-line hint (52px) to the selected event
+     (median 130px, 95th percentile 147px, tallest 164px measured over 96
+     events), which slid the row list down and out from under the pointer. Pin
+     the slot so the rows never move: 150px fits every card but one, and that
+     one scrolls inside the slot. */
+  .panel-detail{height:150px;overflow-y:auto;overscroll-behavior:contain;}
+  /* idle: keep the reserved space but let it read as a detail pane, not an
+     empty box, so the list does not look like it is missing rows */
+  .panel-detail:not(.on){display:grid;place-items:center;text-align:center;border-color:transparent;}
 }
 
 footer{position:relative;z-index:1;max-width:1240px;margin:0 auto;padding:10px 16px 44px;
@@ -247,9 +256,19 @@ footer a{color:var(--amber);text-decoration:underline;}
   .health,.calibration{font-size:10.5px;}
   .eventTip b{font-size:12px;}
   .eventTip span{font-size:10px;}
-  .eventPanel{display:block;max-height:50dvh;overflow-y:auto;overscroll-behavior:contain;padding:9px 10px;}
+  /* no top padding: the pinned card sticks to the panel edge, otherwise a strip
+     of row text scrolls through the padding above it */
+  .eventPanel{display:block;max-height:50dvh;overflow-y:auto;overscroll-behavior:contain;
+    padding:0 10px 10px;}
+  .panel-head{padding:9px 0 7px;margin-bottom:0;}
   .panel-count{font-size:10.5px;}
-  .panel-detail{font-size:11px;padding:9px 10px;}
+  /* the phone panel is one scroll area, so a tapped row's card scrolled out of
+     view above it; pin the card to the panel top and the rows move under it.
+     The card needs its own opaque fill and a shadow, because the rows now pass
+     underneath it: the shared .on rule is translucent. */
+  .panel-detail{font-size:11px;padding:9px 10px;position:sticky;top:0;z-index:1;
+    background:var(--ink-2);}
+  .panel-detail.on{background:#241f19;box-shadow:0 8px 14px rgba(0,0,0,.45);}
   .panelList{overflow:visible;}
   .pd-title{font-size:14px;}
   .pd-meta{font-size:10.5px;}

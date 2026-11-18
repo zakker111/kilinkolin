@@ -2,6 +2,10 @@
 
 ## Done
 
+- [x] 0.16.7 stable event detail slot: hovering a row keeps the list in place instead of sliding
+      it under the pointer and selecting a neighbour, and on phones the tapped event's card stays
+      pinned at the top of the event panel instead of scrolling away above it, and a tapped map
+      dot is no longer cleared by the finger lift's `pointerleave`
 - [x] 0.16.6 mobile Why sheet and address provenance: bottom-sheet explanation, one-scroll phone
       panel, cached day-data fallback and official Metso/Megazone/Valkeakoski addresses
 - [x] 0.16.5 mobile typography and robustness: larger phone type, keyboard event rows, day-bundle

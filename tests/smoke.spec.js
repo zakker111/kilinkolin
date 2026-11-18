@@ -1,17 +1,21 @@
 import { test, expect } from "@playwright/test";
 
-// #panelDetail sits above #panelList and grows when a row is selected, so the
-// rows jump down (about 70px with real fonts) the moment the pointer touches a
-// row. A pointer click then hit-tests a target that has moved, sometimes onto a
-// neighbouring row, and Playwright gives up with "element is not stable". Rows
-// are buttons (tabindex=0, Enter/Space), so activate them from the keyboard and
-// leave the pointer clicks to the map-dot and mobile tap tests.
-async function activateRow(page, row) {
-  await expect(row).toBeVisible();
-  await row.scrollIntoViewIfNeeded();
-  await row.focus();
-  await page.keyboard.press("Enter");
-  await expect(row).toHaveClass(/sel/);
+// Rows are pointer targets that can move: the detail card above the list once
+// grew on hover, and the list is rebuilt when a day's bundle arrives, so a
+// scroll-then-click across protocol round trips could hit a neighbour ("element
+// is not stable") or a row that had already been replaced ("element is not
+// attached to the DOM"). Rows are buttons (tabindex=0, Enter/Space), so select
+// one by id, scrolling and focusing it in a single page call where a rebuild
+// simply means the next poll tries again. The pointer paths stay covered by the
+// map-dot and phone tap tests.
+async function activateRow(page, id) {
+  await page.waitForFunction((rowId) => {
+    const row = document.querySelector(`#panelList .panelRow[data-id="${rowId}"]`);
+    if (!row) return false;
+    row.scrollIntoView({ block: "nearest" });
+    row.focus();
+    return document.activeElement === row && row.classList.contains("sel");
+  }, id);
 }
 
 async function openHockeyWithCalibration(page, mutate) {
@@ -32,7 +36,7 @@ async function openHockeyWithCalibration(page, mutate) {
   });
   expect(hockey).not.toBeNull();
   await page.locator(`.day[data-day="${hockey.date}"]`).click();
-  await activateRow(page, page.locator(`#panelList .panelRow[data-id="${hockey.id}"]`));
+  await activateRow(page, hockey.id);
   await page.locator("#panelDetail .pd-why-btn").click();
   await expect(page.locator("#panelDetail .pd-why")).toBeVisible();
 }
@@ -84,7 +88,7 @@ test.describe("Kilinkolin smoke", () => {
 
   test("the event panel explains the estimate", async ({ page }) => {
     const row = page.locator("#panelList .panelRow[data-id]").first();
-    await activateRow(page, row);
+    await activateRow(page, await row.getAttribute("data-id"));
 
     const button = page.locator("#panelDetail .pd-why-btn");
     await expect(button).toBeVisible();
@@ -102,8 +106,42 @@ test.describe("Kilinkolin smoke", () => {
     await expect(why).toContainText("City calendar");
   });
 
-  test("published events have no exact duplicate listings", async ({ page }) => {
-    const duplicates = await page.evaluate(async () => {
+  test("hovering a row keeps the list under the pointer", async ({ page }) => {
+    // The detail card sits above the list and used to grow on hover (47px hint
+    // to a 116-164px card), sliding the rows down so the pointer ended over a
+    // neighbour. Hover a row and check that nothing moves.
+    const rows = page.locator("#panelList .panelRow[data-id]");
+    await expect(rows.first()).toBeVisible();
+    expect(await rows.count()).toBeGreaterThan(1);
+
+    const geometry = () => page.evaluate(() => ({
+      rows: [...document.querySelectorAll("#panelList .panelRow[data-id]")]
+        .map((row) => Math.round(row.getBoundingClientRect().top)),
+      detail: Math.round(document.getElementById("panelDetail").getBoundingClientRect().height),
+    }));
+    const before = await geometry();
+
+    const target = rows.nth(1);
+    const id = await target.getAttribute("data-id");
+    const title = (await target.locator(".pr-title").innerText()).trim();
+    const box = await target.boundingBox();
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+
+    await expect(page.locator("#panelList .panelRow.sel")).toHaveAttribute("data-id", id);
+    expect((await page.locator("#panelDetail .pd-title").innerText()).trim()).toBe(title);
+    expect(await geometry()).toEqual(before);
+
+    // the pointer is still over the row it selected, not a neighbour
+    const under = await page.evaluate(() => {
+      const row = document.querySelector("#panelList .panelRow.sel");
+      const rect = row.getBoundingClientRect();
+      const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+      return !!hit && hit.closest(".panelRow") === row;
+    });
+    expect(under).toBe(true);
+  });
+
+  test("published events have no exact duplicate listings", async ({ page }) => {    const duplicates = await page.evaluate(async () => {
       const data = await fetch("./data.json").then((r) => r.json());
       const seen = new Map();
       for (const row of data.events || []) {
@@ -151,7 +189,7 @@ test.describe("Kilinkolin smoke", () => {
     const row = page.locator(`#panelList .panelRow[data-id="${missing.id}"]`);
     await expect(row).toBeVisible();
     await expect(row.locator(".pr-time")).toHaveText("TBA");
-    await activateRow(page, row);
+    await activateRow(page, missing.id);
     await expect(page.locator("#panelDetail .pd-meta").first()).toContainText("Start TBA");
     await expect(page.locator("#panelDetail .pd-note").first()).toContainText("spread over 18:00–20:00");
   });
@@ -197,7 +235,7 @@ test.describe("Kilinkolin smoke", () => {
     // rebuilt afterwards; wait for the switch so the row locator is not
     // detached by that re-render.
     await page.waitForFunction((day) => window.KMap.currentDay() === day, target.date);
-    await activateRow(page, page.locator(`#panelList .panelRow[data-id="${target.id}"]`));
+    await activateRow(page, target.id);
     await page.locator("#panelDetail .pd-why-btn").click();
     const why = page.locator("#panelDetail .pd-why");
     await expect(why).toContainText("Competition");
@@ -228,7 +266,7 @@ test.describe("Kilinkolin smoke", () => {
     // rebuilt afterwards; wait for the switch so the row locator is not
     // detached by that re-render.
     await page.waitForFunction((day) => window.KMap.currentDay() === day, target.date);
-    await activateRow(page, page.locator(`#panelList .panelRow[data-id="${target.id}"]`));
+    await activateRow(page, target.id);
     await page.locator("#panelDetail .pd-why-btn").click();
     const why = page.locator("#panelDetail .pd-why");
     await expect(why).toContainText("Venue split");
@@ -272,7 +310,7 @@ test.describe("Kilinkolin smoke", () => {
     await page.waitForFunction((day) => window.KMap.currentDay() === day, hockey.date);
     const row = page.locator("#panelList .panelRow[data-id]").filter({ hasText: hockey.title }).first();
     await expect(row).toBeVisible();
-    await activateRow(page, row);
+    await activateRow(page, await row.getAttribute("data-id"));
 
     const button = page.locator("#panelDetail .pd-why-btn");
     await expect(button).toBeVisible();

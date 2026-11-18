@@ -2,6 +2,32 @@
 
 ## App
 
+### 0.16.7 — 2026-11-18
+Keep the event rows still, and keep the event a phone taps in view.
+
+- Fixed: hovering an event row grew the detail card above the list (a 52 px hint became a card of
+  130 px median and 164 px at its tallest, measured over 96 events), which slid every row down
+  about 100 px and left the pointer over a neighbouring event. On desktop the card now keeps a
+  fixed 150 px slot and scrolls its own overflow, so the rows never move and the hovered row is
+  the row that stays selected. The slot fits 95 of the 96 measured cards exactly and the list
+  shows one more row than a slot at the tallest card would; the idle slot is a centred hint with
+  no box, so the reserved space reads as a detail pane instead of an empty card.
+- Changed: the desktop **Why this number?** working scrolls inside that slot and is scrolled into
+  view when it opens, instead of overflowing a small nested scroll box.
+- Fixed: on phones the detail card is pinned to the top of the event panel, so tapping an event
+  while the list is scrolled no longer draws its card above the panel's own viewport, where the
+  tap looked like it did nothing. The rows move under the pinned card and the tapped row still
+  turns up selected. The pinned card carries its own opaque fill and a shadow, since the shared
+  selected-card rule is translucent and the rows now pass underneath it.
+- Fixed: tapping a map dot on a phone was undone by the finger lift. A touch pointer fires
+  `pointerleave` straight after the tap, which cleared the highlighted dot, hid the tooltip and
+  reset the event card, so a dot tap showed nothing at all on a phone (it worked with a mouse).
+  Touch pointers no longer clear the dot their tap just named, so the tip and the card stay.
+- Verified: 1280×900 hover checks (row tops and card height unchanged, the hovered row keeps
+  `.sel`), 390×844 phone checks (a row tapped inside a scrolled panel keeps its card on screen, a
+  tapped map dot keeps its tip and card), the full 21-check Playwright suite, the 26 Python tests
+  and the validator.
+
 ### 0.16.6 — 2026-11-17
 Refine the phone event panel and finish the venue address provenance.
 

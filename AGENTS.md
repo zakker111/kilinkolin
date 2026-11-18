@@ -185,6 +185,12 @@ On phones the event's "Why" detail opens in a modal bottom sheet so the panel ro
 the sheet body is the only scroll area. Desktop keeps the inline disclosure.
 Keep phone checks to a 390x844 touch viewport.
 
+On desktop (≥1000px) the event panel's detail card keeps a fixed 150px slot and scrolls its own
+overflow, so hovering a row cannot move the rows under the pointer. On phones the card is in the
+panel's flow but sticky at the panel top, so the event just tapped stays in view while the rows
+scroll under it; that panel is one scroll area, never two. A touch pointer leaves the canvas when
+the finger lifts, so `pointerleave` must not clear the dot that a tap has just selected.
+
 Each district in `registry/zones.json` carries a `transit_mode` (`tram`, `bus` or `rail`). It
 colours the corridor that district's people arrive along: close districts walk/bike, farther ones
 follow their tram, bus or train, and the venue's own hub is only a fallback.
