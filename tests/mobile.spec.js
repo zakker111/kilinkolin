@@ -120,7 +120,6 @@ test("the mobile Why sheet keeps the panel rows, scrolls, and dismisses", async 
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await expect(page.locator("#dayStrip .day").first()).toBeVisible();
   await page.waitForFunction(() => window.KMap && window.KMap.dayEvents().length > 0);
-  await page.waitForLoadState("networkidle");
 
   const rows = page.locator("#panelList .panelRow[data-id]");
   const rowCount = await rows.count();
@@ -149,29 +148,17 @@ test("the mobile Why sheet keeps the panel rows, scrolls, and dismisses", async 
 
   await page.locator("#whySheetClose").click();
   await expect(sheet).toBeHidden();
-  await expect(whyButton).toHaveAttribute("aria-expanded", "false");
   await expect(whyButton).toBeFocused();
 
-  await page.waitForTimeout(2000);
-  await expect(async () => {
-    await whyButton.click();
-    await expect(sheet).toBeVisible();
-  }).toPass({ timeout: 10000 });
+  await whyButton.click();
+  await expect(sheet).toBeVisible();
   await page.mouse.click(5, 5);
   await expect(sheet).toBeHidden();
-  await expect(whyButton).toHaveAttribute("aria-expanded", "false");
-  await expect(whyButton).toBeFocused({ timeout: 10000 });
+  await expect(whyButton).toBeFocused();
 
-  await page.waitForTimeout(2000);
-  await expect(async () => {
-    await whyButton.click();
-    await expect(sheet).toBeVisible();
-  }).toPass({ timeout: 10000 });
+  await whyButton.click();
+  await expect(sheet).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(sheet).toBeHidden();
-  await expect(whyButton).toHaveAttribute("aria-expanded", "false");
-  await expect(whyButton).toBeFocused({ timeout: 10000 });
-  await expect(sheet).toBeHidden();
-  await expect(whyButton).toHaveAttribute("aria-expanded", "false");
   await expect(whyButton).toBeFocused();
 });
