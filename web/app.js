@@ -446,31 +446,32 @@
     const totals = [];
     let maxP = 0, peakIdx = 0;
     for (let m = SPARK.start; m <= SPARK.end; m += SPARK.step) {
-      let total = 0;
-      for (const ev of dayEvents) total += window.KMap.eventPeople(ev.id, m) || 0;
-      if (total > maxP) { maxP = total; peakIdx = totals.length; }
-      totals.push({ min: m, total });
+      let t = 0;
+      for (const ev of dayEvents) t += window.KMap.eventPeople(ev.id, m) || 0;
+      if (t > maxP) { maxP = t; peakIdx = totals.length; }
+      totals.push(t);
     }
 
     const n = totals.length;
     const maxT = maxP || 1;
-    const coords = totals.map((p, i) => {
+    const coords = totals.map((t, i) => {
       const x = (i / (n - 1)) * SPARK.w;
-      const y = SPARK.h - SPARK.pad - (p.total / maxT) * (SPARK.h - 2 * SPARK.pad);
+      const y = SPARK.h - SPARK.pad - (t / maxT) * (SPARK.h - 2 * SPARK.pad);
       return `${x.toFixed(1)},${y.toFixed(1)}`;
     });
     const line = coords.join(" ");
     const area = `0,${SPARK.h} ${line} ${SPARK.w},${SPARK.h}`;
     const curIdx = Math.max(0, Math.min(n - 1, Math.round((+$("timeSlider").value - SPARK.start) / SPARK.step)));
-    const curX = (curIdx / (n - 1)) * SPARK.w;
-    const peakMin = totals[peakIdx].min;
+    const curX = ((curIdx / (n - 1)) * SPARK.w).toFixed(1);
+    const peakMin = SPARK.start + peakIdx * SPARK.step;
     const peakLabel = window.KMap.clockLabel(peakMin) + (peakMin >= 24 * 60 ? " +1" : "");
+    const [peakX, peakY] = coords[peakIdx].split(",");
 
     svg.innerHTML =
       `<polygon points="${area}" fill="rgba(209,51,25,.12)" />` +
       `<polyline points="${line}" fill="none" stroke="var(--brick)" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" />` +
-      `<line id="sparkCursor" x1="${curX.toFixed(1)}" y1="0" x2="${curX.toFixed(1)}" y2="${SPARK.h}" stroke="var(--amber)" stroke-width="1" opacity=".8" />` +
-      `<circle cx="${coords[peakIdx].split(",")[0]}" cy="${coords[peakIdx].split(",")[1]}" r="2.6" fill="var(--amber)" stroke="var(--ink-2)" stroke-width="1" />`;
+      `<line id="sparkCursor" x1="${curX}" y1="0" x2="${curX}" y2="${SPARK.h}" stroke="var(--amber)" stroke-width="1" opacity=".8" />` +
+      `<circle cx="${peakX}" cy="${peakY}" r="2.6" fill="var(--amber)" stroke="var(--ink-2)" stroke-width="1" />`;
     if (peakEl) peakEl.textContent = `peak ${peakLabel} · ≈ ${Math.round(maxP).toLocaleString("fi-FI")}`;
   }
 
