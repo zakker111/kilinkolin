@@ -4,7 +4,7 @@ An **estimated crowd-flow heat map** for events in Tampere: pick a day, drag the
 where the estimated crowd is on the streets at that moment. The map is the answer; the panel
 names what is on.
 
-Live: https://zakker111.github.io/kilinkolin/ · **v0.20.0** · model **2026.11.16** · schema **3**
+Live: https://zakker111.github.io/kilinkolin/ · **v0.20.1** · model **2026.11.16** · schema **3**
 
 ## What it does
 
@@ -17,6 +17,10 @@ Live: https://zakker111.github.io/kilinkolin/ · **v0.20.0** · model **2026.11.
 - **Day strip + hour scrubber** — 15-minute steps from 06:00 to 06:00 the next day. Moving the
   hour repaints the heat and updates the estimate. **▶** plays the whole day in about 15 s, so the
   arrivals and the walk home can be watched instead of stepped.
+- **Crush-hour sparkline** — a small curve under the hour bar plots total people on routes across
+  the day, with the peak marked and labelled (e.g. "peak 21:45 · ≈ 1 683"). It is summed from the
+  same per-event model as the estimate card, so the two always agree, and it answers "when is it
+  busiest?" without playing the day.
 - **Shareable views** — the day, hour, zoom and map centre live in the URL hash
   (`#d=2026-11-18&t=1095&z=13.20&c=61.49780,23.76100`), so a link reopens exactly what someone
   was looking at, and the address bar follows the view as it changes.

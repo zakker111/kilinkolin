@@ -446,8 +446,7 @@
     const totals = [];
     let maxP = 0, peakIdx = 0;
     for (let m = SPARK.start; m <= SPARK.end; m += SPARK.step) {
-      let t = 0;
-      for (const ev of dayEvents) t += window.KMap.eventPeople(ev.id, m) || 0;
+      const t = window.KMap.dayPeople(m);
       if (t > maxP) { maxP = t; peakIdx = totals.length; }
       totals.push(t);
     }

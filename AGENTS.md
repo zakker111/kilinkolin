@@ -6,7 +6,8 @@ Working notes for anyone (human or agent) changing this repo.
 
 A static site: one **estimated crowd-flow heat map** for Tampere. The controls are a day and an
 hour; the map aggregates every event that day into the streets people are estimated to be on at
-that moment, plus the number on the move. A right-hand panel names what is on that day and shows
+that moment, plus the number on the move. A sparkline under the hour bar plots that total across
+the day and marks the peak, using `KMap.dayPeople(minute)` so it agrees with the estimate card. A right-hand panel names what is on that day and shows
 the event under the pointer; hovering a dot on the map names the same event there.
 Python builds the data in GitHub Actions; the browser only fetches JSON, tiles and renders.
 The workflow refreshes once a week, on Sundays at 04:00 UTC: new events are fetched, their

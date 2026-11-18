@@ -531,6 +531,22 @@
     return out;
   }
 
+  /* people on routes across the chosen day at a minute, by the same rule
+     aggregate() uses for the estimate card */
+  function dayPeople(minute) {
+    let total = 0;
+    S.events.forEach((ev) => {
+      if (ev.date !== S.day) return;
+      const flow = S.flows[ev.id];
+      if (!flow) return;
+      const start = parseMin(ev.time);
+      if (start == null) return;
+      const weight = enRoute(flow, minute, start);
+      if (weight >= 1) total += weight;
+    });
+    return total;
+  }
+
   /* ---------------------------------------------------------- heat layer */
   function buildShapes(map, legs, total, pad = 0) {
     const shapes = [];
@@ -1153,6 +1169,8 @@
       S.minutes = min;
       refresh();
     },
+    /* total estimated people on routes on the chosen day at a minute */
+    dayPeople,
     /* test/debug hook: one event's estimated people on a route at a minute */
     eventPeople(id, minute) {
       const flow = S.flows[id];

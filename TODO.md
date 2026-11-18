@@ -2,6 +2,9 @@
 
 ## Done
 
+- [x] 0.20.1 crush-hour sparkline under the hour bar, summed with `KMap.dayPeople` so it matches
+      the estimate card; Why-sheet label spacing and legend wrapping fixed on narrow phones
+
 - [x] 0.20.0 arrival timing: each timed event card names the peak on routes and the quietest
       arrival, from the per-event arrival/egress slices already in flows.json
 - [x] 0.19.0 card actions: a "Directions" link to the venue's published point and a client-side

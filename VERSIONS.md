@@ -2,6 +2,19 @@
 
 ## App
 
+### 0.20.1 — 2026-11-18
+Crush hour at a glance: a day sparkline under the hour bar, plus mobile layout fixes.
+
+- Added: a small sparkline between the hour bar and the map plotting total people on routes for
+  every 15-minute slot from 06:00 to 06:00. The peak is marked and labelled, and a cursor follows
+  the chosen hour. Totals come from `KMap.dayPeople(minute)`, the same rule the estimate card
+  uses, so the two cannot disagree.
+- Fixed: the Why sheet's "Competition" label no longer runs into its value on a phone.
+- Fixed: the legend's category dots wrap instead of overflowing on 320–360 px screens.
+- Verified: 390×844 touch layout (sparkline, map, panel, Why sheet, dot taps, playback), no
+  horizontal overflow from 320 to 1280 px, no long tasks while scrubbing or playing, the 26
+  Python tests and the validator.
+
 ### 0.20.0 — 2026-11-18
 When to go: the card now names the quietest arrival and when most people arrive.
 
