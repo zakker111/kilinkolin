@@ -16,8 +16,6 @@
   let selectedId = null;
   let CALIBRATION = null;
   let sheetTrigger = null;
-  let sparkPoints = [];
-  let sparkPeakMin = null;
 
   const esc = (s) => String(s == null ? "" : s)
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -393,93 +391,98 @@
     $("panelCount").textContent = dayEvents.length
       ? `${dayEvents.length} event${dayEvents.length === 1 ? "" : "s"}`
       : "";
-    if (!dayEvents.length) {
+    if (dayEvents.length) {
+      const now = +$("timeSlider").value;
+      list.innerHTML = dayEvents.map((e) => {
+        const occurring = e.start != null && e.end != null && now >= e.start && now < e.end;
+        const soon = e.start != null && !occurring && now >= e.start - 120 && now < e.start;
+        const addr = addrOf(e);
+        return `<li class="panelRow${occurring ? " on" : ""}${soon ? " soon" : ""}" data-id="${esc(e.id)}" tabindex="0" role="button">` +
+          `<span class="pr-time">${esc(e.timeKnown === false ? "TBA" : (e.time || "—"))}</span>` +
+          `<span class="pr-body"><span class="pr-title">${esc(e.title)}</span>` +
+          `<span class="pr-venue">${esc(e.venue)}${addr ? " · " + esc(addr) : ""}</span></span>` +
+          `<span class="cat cat-${esc(e.category)}">${esc(CAT_LABEL[e.category] || "Event")}</span></li>`;
+      }).join("");
+      list.querySelectorAll(".panelRow[data-id]").forEach((row) => {
+        const id = row.dataset.id;
+        row.addEventListener("mouseenter", () => { select(id); window.KMap.focusEvent(id); });
+        row.addEventListener("mouseleave", () => { if (selectedId === id) window.KMap.focusEvent(null); });
+        row.addEventListener("click", () => { select(id); window.KMap.focusEvent(id); });
+        row.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
+            e.preventDefault();
+            select(id);
+            window.KMap.focusEvent(id);
+          }
+        });
+        row.addEventListener("focus", () => { select(id); window.KMap.focusEvent(id); });
+      });
+      renderDetail(selectedId && dayEvents.some((e) => e.id === selectedId) ? selectedId : null);
+    } else {
       list.innerHTML = `<li class="panelRow empty">No events on this day.</li>`;
       renderDetail(null);
-      return;
     }
-    const now = +$("timeSlider").value;
-    list.innerHTML = dayEvents.map((e) => {
-      const occurring = e.start != null && e.end != null && now >= e.start && now < e.end;
-      const soon = e.start != null && !occurring && now >= e.start - 120 && now < e.start;
-      const addr = addrOf(e);
-      return `<li class="panelRow${occurring ? " on" : ""}${soon ? " soon" : ""}" data-id="${esc(e.id)}" tabindex="0" role="button">` +
-        `<span class="pr-time">${esc(e.timeKnown === false ? "TBA" : (e.time || "—"))}</span>` +
-        `<span class="pr-body"><span class="pr-title">${esc(e.title)}</span>` +
-        `<span class="pr-venue">${esc(e.venue)}${addr ? " · " + esc(addr) : ""}</span></span>` +
-        `<span class="cat cat-${esc(e.category)}">${esc(CAT_LABEL[e.category] || "Event")}</span></li>`;
-    }).join("");
-    list.querySelectorAll(".panelRow[data-id]").forEach((row) => {
-      const id = row.dataset.id;
-      row.addEventListener("mouseenter", () => { select(id); window.KMap.focusEvent(id); });
-      row.addEventListener("mouseleave", () => { if (selectedId === id) window.KMap.focusEvent(null); });
-      row.addEventListener("click", () => { select(id); window.KMap.focusEvent(id); });
-      row.addEventListener("keydown", (e) => {
-        if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
-          e.preventDefault();
-          select(id);
-          window.KMap.focusEvent(id);
-        }
-      });
-      row.addEventListener("focus", () => { select(id); window.KMap.focusEvent(id); });
-    });
-    renderDetail(selectedId && dayEvents.some((e) => e.id === selectedId) ? selectedId : null);
     renderSpark();
   }
 
   /* -------------------------------------------------------------- day sparkline
      Total people on routes for each 15-minute slot of the day, read from the same
      per-event enRoute model the map uses. Shows the crush hour at a glance. */
+  const SPARK = { start: 360, end: 1800, step: 15, w: 240, h: 32, pad: 2 };
+
   function renderSpark() {
     const row = $("sparkRow");
     const svg = $("daySpark");
     const peakEl = $("sparkPeak");
     if (!row || !svg) return;
-    if (!dayEvents.length) { row.hidden = true; sparkPoints = []; sparkPeakMin = null; return; }
-    row.hidden = false;
-    const pts = [];
-    let maxP = 0, peakIdx = 0;
-    for (let m = 360; m <= 1800; m += 15) {
-      let total = 0;
-      for (const ev of dayEvents) {
-        total += window.KMap.eventPeople(ev.id, m) || 0;
-      }
-      pts.push({ min: m, total });
-      if (total > maxP) { maxP = total; peakIdx = pts.length - 1; }
+    if (!dayEvents.length) {
+      row.hidden = true;
+      svg.innerHTML = "";
+      if (peakEl) peakEl.textContent = "";
+      return;
     }
-    sparkPoints = pts;
-    sparkPeakMin = pts[peakIdx].min;
-    const W = 240, H = 32, pad = 2;
-    const n = pts.length;
-    const maxT = maxP > 0 ? maxP : 1;
-    const xs = pts.map((_, i) => (i / (n - 1)) * W);
-    const ys = pts.map((p) => H - pad - (p.total / maxT) * (H - 2 * pad));
-    const line = xs.map((x, i) => `${x.toFixed(1)},${ys[i].toFixed(1)}`).join(" ");
-    const area = `0,${H} ` + xs.map((x, i) => `${x.toFixed(1)},${ys[i].toFixed(1)}`).join(" ") + ` ${W},${H}`;
-    const peakX = xs[peakIdx], peakY = ys[peakIdx];
-    const curMin = +$("timeSlider").value;
-    const curIdx = Math.max(0, Math.min(n - 1, Math.round((curMin - 360) / 15)));
-    const curX = xs[curIdx];
-    const peakLabel = window.KMap.clockLabel(sparkPeakMin) + (sparkPeakMin >= 24 * 60 ? " +1" : "");
+    row.hidden = false;
+
+    const totals = [];
+    let maxP = 0, peakIdx = 0;
+    for (let m = SPARK.start; m <= SPARK.end; m += SPARK.step) {
+      let total = 0;
+      for (const ev of dayEvents) total += window.KMap.eventPeople(ev.id, m) || 0;
+      if (total > maxP) { maxP = total; peakIdx = totals.length; }
+      totals.push({ min: m, total });
+    }
+
+    const n = totals.length;
+    const maxT = maxP || 1;
+    const coords = totals.map((p, i) => {
+      const x = (i / (n - 1)) * SPARK.w;
+      const y = SPARK.h - SPARK.pad - (p.total / maxT) * (SPARK.h - 2 * SPARK.pad);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    });
+    const line = coords.join(" ");
+    const area = `0,${SPARK.h} ${line} ${SPARK.w},${SPARK.h}`;
+    const curIdx = Math.max(0, Math.min(n - 1, Math.round((+$("timeSlider").value - SPARK.start) / SPARK.step)));
+    const curX = (curIdx / (n - 1)) * SPARK.w;
+    const peakMin = totals[peakIdx].min;
+    const peakLabel = window.KMap.clockLabel(peakMin) + (peakMin >= 24 * 60 ? " +1" : "");
+
     svg.innerHTML =
       `<polygon points="${area}" fill="rgba(209,51,25,.12)" />` +
       `<polyline points="${line}" fill="none" stroke="var(--brick)" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" />` +
-      `<line x1="${curX.toFixed(1)}" y1="0" x2="${curX.toFixed(1)}" y2="${H}" stroke="var(--amber)" stroke-width="1" opacity=".8" />` +
-      `<circle cx="${peakX.toFixed(1)}" cy="${peakY.toFixed(1)}" r="2.6" fill="var(--amber)" stroke="var(--ink-2)" stroke-width="1" />`;
+      `<line id="sparkCursor" x1="${curX.toFixed(1)}" y1="0" x2="${curX.toFixed(1)}" y2="${SPARK.h}" stroke="var(--amber)" stroke-width="1" opacity=".8" />` +
+      `<circle cx="${coords[peakIdx].split(",")[0]}" cy="${coords[peakIdx].split(",")[1]}" r="2.6" fill="var(--amber)" stroke="var(--ink-2)" stroke-width="1" />`;
     if (peakEl) peakEl.textContent = `peak ${peakLabel} · ≈ ${Math.round(maxP).toLocaleString("fi-FI")}`;
   }
 
   function updateSparkCursor() {
-    const svg = $("daySpark");
-    if (!svg || !sparkPoints.length) return;
-    const W = 240, H = 32;
-    const n = sparkPoints.length;
-    const curMin = +$("timeSlider").value;
-    const curIdx = Math.max(0, Math.min(n - 1, Math.round((curMin - 360) / 15)));
-    const curX = (curIdx / (n - 1)) * W;
-    // update the cursor line's x
-    const line = svg.querySelector("line");
-    if (line) { line.setAttribute("x1", curX.toFixed(1)); line.setAttribute("x2", curX.toFixed(1)); }
+    const row = $("sparkRow");
+    const cursor = $("sparkCursor");
+    if (!row || row.hidden || !cursor) return;
+    const n = (SPARK.end - SPARK.start) / SPARK.step + 1;
+    const idx = Math.max(0, Math.min(n - 1, Math.round((+$("timeSlider").value - SPARK.start) / SPARK.step)));
+    const x = ((idx / (n - 1)) * SPARK.w).toFixed(1);
+    cursor.setAttribute("x1", x);
+    cursor.setAttribute("x2", x);
   }
 
   /* time moves do not change any row text, only its on/soon state */
