@@ -4,7 +4,7 @@ An **estimated crowd-flow heat map** for events in Tampere: pick a day, drag the
 where the estimated crowd is on the streets at that moment. The map is the answer; the panel
 names what is on.
 
-Live: https://zakker111.github.io/kilinkolin/ · **v0.20.1** · model **2026.11.16** · schema **3**
+Live: https://zakker111.github.io/kilinkolin/ · **v0.20.2** · model **2026.11.16** · schema **3**
 
 ## What it does
 

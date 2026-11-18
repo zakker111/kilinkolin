@@ -2,6 +2,20 @@
 
 ## App
 
+### 0.20.2 — 2026-11-18
+Event list: hovering can no longer steal the click it was about to receive.
+
+- Fixed: selecting a row rebuilt the detail card, whose height change moved the
+  list under a still pointer and fired another selection — a hover cascade that
+  made rows and the Why button unclickable while it ran. On a mouse the list now
+  follows real pointer movement (`mousemove`) instead of `mouseenter`.
+- Fixed: phones and other coarse pointers no longer select rows on hover at all;
+  tapping still does, and the pinned detail card no longer lands on the row under
+  the finger.
+- Verified: the CI mobile Why-sheet sequence (row tap, open, close, backdrop,
+  Escape, focus return) in a 390x844 touch context, desktop hover still selecting
+  the row under the mouse, and the validator.
+
 ### 0.20.1 — 2026-11-18
 Crush hour at a glance: a day sparkline under the hour bar, plus mobile layout fixes.
 

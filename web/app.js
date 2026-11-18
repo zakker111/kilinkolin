@@ -14,6 +14,7 @@
   let dayEvents = [];
   let dayIndex = new Map();
   let selectedId = null;
+  let listWired = false;
   let CALIBRATION = null;
   let sheetTrigger = null;
 
@@ -403,10 +404,27 @@
           `<span class="pr-venue">${esc(e.venue)}${addr ? " · " + esc(addr) : ""}</span></span>` +
           `<span class="cat cat-${esc(e.category)}">${esc(CAT_LABEL[e.category] || "Event")}</span></li>`;
       }).join("");
+      if (!listWired) {
+        listWired = true;
+        /* Phones do not hover, and the pinned detail card would cover the row
+           under the pointer as soon as it grew. On a mouse, selection follows
+           real movement: mouseenter also fires when a layout change puts a row
+           under a still pointer, and the card's height changes the list under
+           it, which cascaded. mousemove cannot: no motion, no event. */
+        if (!IS_MOBILE) {
+          list.addEventListener("mousemove", (e) => {
+            const row = e.target.closest && e.target.closest(".panelRow[data-id]");
+            if (!row) return;
+            const id = row.dataset.id;
+            if (id === selectedId) return;
+            select(id);
+            window.KMap.focusEvent(id);
+          });
+          list.addEventListener("mouseleave", () => { if (selectedId) window.KMap.focusEvent(null); });
+        }
+      }
       list.querySelectorAll(".panelRow[data-id]").forEach((row) => {
         const id = row.dataset.id;
-        row.addEventListener("mouseenter", () => { select(id); window.KMap.focusEvent(id); });
-        row.addEventListener("mouseleave", () => { if (selectedId === id) window.KMap.focusEvent(null); });
         row.addEventListener("click", () => { select(id); window.KMap.focusEvent(id); });
         row.addEventListener("keydown", (e) => {
           if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {

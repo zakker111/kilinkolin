@@ -2,6 +2,10 @@
 
 ## Done
 
+- [x] 0.20.2 hover cascade in the event list: mouse selection follows real movement
+      (`mousemove`) and coarse pointers do not hover-select, so the detail card can no
+      longer shift a row under the pointer and swallow its click
+
 - [x] 0.20.1 crush-hour sparkline under the hour bar, summed with `KMap.dayPeople` so it matches
       the estimate card; Why-sheet label spacing and legend wrapping fixed on narrow phones
 
