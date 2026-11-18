@@ -108,6 +108,12 @@ of arrivals), `modes[]`, `legs[]`, `corridors[]` (straight fallback only), `arri
 `attendance`, `legs[].people` and `corridors[].people` are scaled together by the competition
 factor and then by the venue-collision allocation.
 
+`map.js` `KMap.dayEvents()` exposes each event's `arrival[]` and `egress[]` slices (the same
+15-minute arrays, relative to the event start) alongside `start`/`end`/`attendance`/`basis`, so UI
+code can read arrival timing without reaching into `S.flows`. Treat adding fields there as a data-
+contract change: bump the version, update `VERSIONS.md`/`README.md`/`TODO.md`, and extend the smoke
+suite rather than asserting a new count.
+
 ### Calibration contract
 
 - **Only realized attendance can produce a backtest error.** Liiga publishes `spectators` for

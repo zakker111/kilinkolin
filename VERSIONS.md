@@ -12,7 +12,7 @@ When to go: the card now says when the crowd on routes peaks and the quietest ar
 - Added: the quietest arrival slice and the peak arrival slice are both reported, so a user can see
   the spread, not just the top number.
 - Verified: the card shows an "On routes peak" and a "Quietest arrival" time for a timed event;
-  28 Playwright checks, the 26 Python tests and the validator.
+  27 Playwright checks, the 26 Python tests and the validator.
 
 ### 0.19.0 — 2026-11-18
 An event card you can act on: walking directions and a calendar file.
