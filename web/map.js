@@ -219,7 +219,10 @@
         if (S.hideTip) S.hideTip();
       });
       c.addEventListener("pointermove", (e) => {
-        if (!drag) { this._hover(e); return; }
+        // A phone has no hover: a pointer moving across the map on the way to the
+        // panel would otherwise clear the event the user just tapped. Dots are
+        // chosen by tap there, so only a fine pointer hovers.
+        if (!drag) { if (!MOBILE && e.pointerType !== "touch") this._hover(e); return; }
         const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
         drag = { x: e.clientX, y: e.clientY };
         const cx = this.worldX(this.center.lon, this._z) - dx / this._scale;
@@ -241,7 +244,7 @@
         // a finger lifts straight after a tap, so the touch pointer leaves and
         // this would undo the selection that tap just made; only a pointer that
         // can hover should clear the dot it left
-        if (e && e.pointerType === "touch") return;
+        if (MOBILE || (e && e.pointerType === "touch")) return;
         S.hoverId = null;
         if (S.hideTip) S.hideTip();
         if (S.onHover) S.onHover(null);

@@ -2,6 +2,17 @@
 
 ## App
 
+### 0.20.3 — 2026-11-18
+Phones keep the event you picked: the map no longer clears it under a moving pointer.
+
+- Fixed: a pointer crossing the map on a phone fired the hover path, found no dot
+  and cleared the selected event — closing the Why sheet and reaching for the card
+  could wipe the card mid-tap. Hover is now limited to a fine pointer, as a phone
+  has none; taps still choose dots.
+- Verified: the CI mobile Why-sheet sequence with an explicit map crossing (row tap,
+  open, close, reopen, backdrop, Escape, focus return) at 390x844 with touch, plus
+  desktop dot hover still naming the event and clearing when the pointer leaves.
+
 ### 0.20.2 — 2026-11-18
 Event list: hovering can no longer steal the click it was about to receive.
 
