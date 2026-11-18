@@ -1,5 +1,19 @@
 import { test, expect } from "@playwright/test";
 
+// #panelDetail sits above #panelList and grows when a row is selected, so the
+// rows jump down (about 70px with real fonts) the moment the pointer touches a
+// row. A pointer click then hit-tests a target that has moved, sometimes onto a
+// neighbouring row, and Playwright gives up with "element is not stable". Rows
+// are buttons (tabindex=0, Enter/Space), so activate them from the keyboard and
+// leave the pointer clicks to the map-dot and mobile tap tests.
+async function activateRow(page, row) {
+  await expect(row).toBeVisible();
+  await row.scrollIntoViewIfNeeded();
+  await row.focus();
+  await page.keyboard.press("Enter");
+  await expect(row).toHaveClass(/sel/);
+}
+
 async function openHockeyWithCalibration(page, mutate) {
   await page.route("**/data.json", async (route) => {
     const response = await route.fetch();
@@ -18,7 +32,7 @@ async function openHockeyWithCalibration(page, mutate) {
   });
   expect(hockey).not.toBeNull();
   await page.locator(`.day[data-day="${hockey.date}"]`).click();
-  await page.locator(`#panelList .panelRow[data-id="${hockey.id}"]`).click();
+  await activateRow(page, page.locator(`#panelList .panelRow[data-id="${hockey.id}"]`));
   await page.locator("#panelDetail .pd-why-btn").click();
   await expect(page.locator("#panelDetail .pd-why")).toBeVisible();
 }
@@ -70,7 +84,7 @@ test.describe("Kilinkolin smoke", () => {
 
   test("the event panel explains the estimate", async ({ page }) => {
     const row = page.locator("#panelList .panelRow[data-id]").first();
-    await row.click();
+    await activateRow(page, row);
 
     const button = page.locator("#panelDetail .pd-why-btn");
     await expect(button).toBeVisible();
@@ -137,7 +151,7 @@ test.describe("Kilinkolin smoke", () => {
     const row = page.locator(`#panelList .panelRow[data-id="${missing.id}"]`);
     await expect(row).toBeVisible();
     await expect(row.locator(".pr-time")).toHaveText("TBA");
-    await row.click();
+    await activateRow(page, row);
     await expect(page.locator("#panelDetail .pd-meta").first()).toContainText("Start TBA");
     await expect(page.locator("#panelDetail .pd-note").first()).toContainText("spread over 18:00–20:00");
   });
@@ -179,7 +193,11 @@ test.describe("Kilinkolin smoke", () => {
     expect(target, "the build should discount at least one concurrent event").not.toBeNull();
 
     await page.locator(`.day[data-day="${target.date}"]`).click();
-    await page.locator(`#panelList .panelRow[data-id="${target.id}"]`).click();
+    // The day button is disabled while its bundle loads and the panel is
+    // rebuilt afterwards; wait for the switch so the row locator is not
+    // detached by that re-render.
+    await page.waitForFunction((day) => window.KMap.currentDay() === day, target.date);
+    await activateRow(page, page.locator(`#panelList .panelRow[data-id="${target.id}"]`));
     await page.locator("#panelDetail .pd-why-btn").click();
     const why = page.locator("#panelDetail .pd-why");
     await expect(why).toContainText("Competition");
@@ -206,7 +224,11 @@ test.describe("Kilinkolin smoke", () => {
     expect(target.collision.room_split).toBe("UNRESOLVED");
 
     await page.locator(`.day[data-day="${target.date}"]`).click();
-    await page.locator(`#panelList .panelRow[data-id="${target.id}"]`).click();
+    // The day button is disabled while its bundle loads and the panel is
+    // rebuilt afterwards; wait for the switch so the row locator is not
+    // detached by that re-render.
+    await page.waitForFunction((day) => window.KMap.currentDay() === day, target.date);
+    await activateRow(page, page.locator(`#panelList .panelRow[data-id="${target.id}"]`));
     await page.locator("#panelDetail .pd-why-btn").click();
     const why = page.locator("#panelDetail .pd-why");
     await expect(why).toContainText("Venue split");
@@ -247,9 +269,10 @@ test.describe("Kilinkolin smoke", () => {
     expect(hockey.calibration.sample).toBeGreaterThanOrEqual(8);
 
     await page.locator(`.day[data-day="${hockey.date}"]`).click();
+    await page.waitForFunction((day) => window.KMap.currentDay() === day, hockey.date);
     const row = page.locator("#panelList .panelRow[data-id]").filter({ hasText: hockey.title }).first();
     await expect(row).toBeVisible();
-    await row.click();
+    await activateRow(page, row);
 
     const button = page.locator("#panelDetail .pd-why-btn");
     await expect(button).toBeVisible();
