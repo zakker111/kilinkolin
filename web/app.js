@@ -218,13 +218,10 @@
      The model already ships per-event arrival slices (shares by 15-min window);
      surface the quietest and the peak as one honest line. No recomputation. */
   function arrivalTiming(ev) {
-    if (!ev.start || !ev.arrival?.length) return null;
-    let quietest = ev.arrival[0], peak = ev.arrival[0];
-    for (const s of ev.arrival) {
-      if (s.share < quietest.share) quietest = s;
-      if (s.share > peak.share) peak = s;
-    }
-    const clock = (min) => window.KMap.clockLabel(min);
+    if (ev.start == null || !ev.arrival?.length) return null;
+    const quietest = ev.arrival.reduce((a, b) => (b.share < a.share ? b : a));
+    const peak = ev.arrival.reduce((a, b) => (b.share > a.share ? b : a));
+    const clock = window.KMap.clockLabel;
     return { quietest: clock(ev.start + quietest.t), peak: clock(ev.start + peak.t) };
   }
 
