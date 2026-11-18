@@ -214,6 +214,32 @@
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
+  /* --------------------------------------------------------- arrival timing
+     The model already ships per-event arrival/egress slices; turn them into one
+     honest line: when the crowd on routes peaks, and the quietest arrival. */
+  function arrivalTiming(ev) {
+    if (ev.start == null || !Array.isArray(ev.arrival) || !ev.arrival.length) return null;
+    let quietest = ev.arrival[0], peakArrival = ev.arrival[0];
+    for (const s of ev.arrival) {
+      if (s.share < quietest.share) quietest = s;
+      if (s.share > peakArrival.share) peakArrival = s;
+    }
+    // peak people actually on routes across the event's span (15-min steps)
+    const end = ev.end != null ? ev.end : ev.start + 120;
+    let peakMin = ev.start, peakVal = -1;
+    for (let m = ev.start - 120; m <= end + 60; m += 15) {
+      const v = window.KMap.eventPeople(ev.id, m);
+      if (v > peakVal) { peakVal = v; peakMin = m; }
+    }
+    const clock = (min) => window.KMap.clockLabel(min);
+    return {
+      peakOnRoutes: clock(peakMin),
+      peakVal: peakVal,
+      quietestArrival: clock(ev.start + quietest.t),
+      peakArrival: clock(ev.start + peakArrival.t),
+    };
+  }
+
   function renderDetail(id) {
     const box = $("panelDetail");
     if (!box) return;
@@ -249,6 +275,11 @@
       `<div class="pd-meta"><span class="cat cat-${esc(ev.category)}">${esc(CAT_LABEL[ev.category] || "Event")}</span>` +
       `${ev.mid != null ? `<span class="pd-est">≈ ${ev.mid.toLocaleString("fi-FI")} people, estimated</span>` : noCapacity ? `<span class="pd-est">No crowd estimate · capacity unpublished</span>` : ""}</div>` +
       `<div class="pd-note">${timeNote}${noCapacity ? "Capacity is unpublished, so no crowd estimate is shown." : "Estimate, not a measurement."}</div>` +
+      (function () {
+        const t = arrivalTiming(ev);
+        if (!t) return "";
+        return `<div class="pd-arrival">On routes peak ≈ ${esc(t.peakOnRoutes)} (≈ ${t.peakVal.toLocaleString("fi-FI")} people). Quietest arrival ≈ ${esc(t.quietestArrival)}.</div>`;
+      })() +
       actions +
       (ev.basis ? `<button class="pd-why-btn" type="button" aria-expanded="false" ${IS_MOBILE ? `aria-haspopup="dialog" aria-controls="whySheet"` : `aria-controls="${esc(whyId)}"`}>${whyLabel}</button>` +
         (IS_MOBILE ? "" : `<div class="pd-why" id="${esc(whyId)}" hidden>${why}</div>`) : "");

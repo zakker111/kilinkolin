@@ -4,7 +4,7 @@ An **estimated crowd-flow heat map** for events in Tampere: pick a day, drag the
 where the estimated crowd is on the streets at that moment. The map is the answer; the panel
 names what is on.
 
-Live: https://zakker111.github.io/kilinkolin/ · **v0.19.0** · model **2026.11.16** · schema **3**
+Live: https://zakker111.github.io/kilinkolin/ · **v0.20.0** · model **2026.11.16** · schema **3**
 
 ## What it does
 
@@ -168,7 +168,7 @@ cd tests && npm ci && npx playwright install chromium && npm test
 
 The suite runs 18 Python model tests for calibration states, cap edges, dedupe, missing-time
 handling, TBA start options, competition cases and venue-collision allocation, plus 8 Python
-tests for the route-coverage and data-churn gates. It then runs 27 Playwright checks: switching
+tests for the route-coverage and data-churn gates. It then runs 28 Playwright checks: switching
 days, both ends of the hour slider, tapping a real map dot with a mouse and with a touch,
 duplicate-free data, TBA labels and spread window, capacity caps, the competition and venue-split
 panel rows, the "Why this number?" panel, the Liiga fitted-fill/backtest text, hovering a row
@@ -176,8 +176,9 @@ without moving the list at 1280×900 and at 800×900, tapping a phone row whose 
 away, the phone Why sheet, the day-bundle fallback, a dragged hour slider bringing the heat back
 without queueing a raster per step, and a heat worker that never answers falling back to the
 main thread, a shared `#hash` link opening its day, hour, zoom and centre, the play button walking
-the hour forward and pausing again, and an event card's walking-directions link and downloaded
-`.ics` (whose UTC start reads back as the card's Helsinki hour). The build workflow runs it before deployment, then
+the hour forward and pausing again, an event card's walking-directions link and downloaded `.ics`
+(whose UTC start reads back as the card's Helsinki hour), and a card's peak-on-routes / quietest-
+arrival timing line built from the model's own arrival slices. The build workflow runs it before deployment, then
 runs a separate live Pages smoke test after deployment.
 
 ## Deploy

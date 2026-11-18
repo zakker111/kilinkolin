@@ -160,6 +160,7 @@ html:not(.is-mobile) .panel-detail{order:3;flex:none;margin:8px 0 0;max-height:1
 .pd-meta{margin-top:4px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:9.5px;color:var(--paper-dim);}
 .pd-est{color:var(--paper);}
 .pd-note{margin-top:5px;font-size:9px;color:var(--amber);}
+.pd-arrival{margin-top:4px;font-size:9px;color:var(--teal);}
 .pd-hint{font-size:9.5px;}
 .pd-actions{margin-top:7px;display:flex;gap:6px;flex-wrap:wrap;}
 .pd-act{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border:1px solid rgba(239,232,216,.28);
@@ -287,6 +288,7 @@ footer a{color:var(--amber);text-decoration:underline;}
   .pd-hint{font-size:10.5px;}
   .pd-why-btn{font-size:10px;padding:5px 8px;min-height:40px;}
   .pd-act{font-size:9.5px;padding:5px 9px;min-height:38px;}
+  .pd-arrival{font-size:10px;}
   .why-row>span:first-child{font-size:9.5px;}
   .why-row b{font-size:11px;}
   .why-row small{font-size:9px;}
