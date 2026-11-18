@@ -8,6 +8,9 @@ import { test, expect } from "@playwright/test";
 // one by id, scrolling and focusing it in a single page call where a rebuild
 // simply means the next poll tries again. The pointer paths stay covered by the
 // map-dot and phone tap tests.
+const rowTops = (page) => page.evaluate(() => [...document.querySelectorAll("#panelList .panelRow[data-id]")]
+  .map((row) => Math.round(row.getBoundingClientRect().top)));
+
 async function activateRow(page, id) {
   await page.waitForFunction((rowId) => {
     const row = document.querySelector(`#panelList .panelRow[data-id="${rowId}"]`);
@@ -114,9 +117,7 @@ test.describe("Kilinkolin smoke", () => {
     await expect(rows.first()).toBeVisible();
     expect(await rows.count()).toBeGreaterThan(1);
 
-    const rowTops = () => page.evaluate(() => [...document.querySelectorAll("#panelList .panelRow[data-id]")]
-      .map((row) => Math.round(row.getBoundingClientRect().top)));
-    const before = await rowTops();
+    const before = await rowTops(page);
 
     const target = rows.nth(1);
     const id = await target.getAttribute("data-id");
@@ -126,7 +127,7 @@ test.describe("Kilinkolin smoke", () => {
 
     await expect(page.locator("#panelList .panelRow.sel")).toHaveAttribute("data-id", id);
     expect((await page.locator("#panelDetail .pd-title").innerText()).trim()).toBe(title);
-    expect(await rowTops()).toEqual(before);
+    expect(await rowTops(page)).toEqual(before);
 
     // the pointer is still over the row it selected, not a neighbour
     const under = await page.evaluate(() => {
@@ -366,6 +367,46 @@ test.describe("Kilinkolin smoke", () => {
     const title = shown.split(" · ").slice(1).join(" · ");
     expect(title).not.toBe("");
     expect((await page.locator("#panelDetail .pd-title").textContent()) || "").toBe(title);
+  });
+});
+
+// Wider than the phone layout, narrower than the desktop grid, so the panel has
+// no fixed height here. This is the width the 0.16.7 fixed slot never covered,
+// and hovering a row slid every row 84px under the pointer.
+test.describe("a pointer window narrower than the desktop grid", () => {
+  test.use({ viewport: { width: 800, height: 900 } });
+
+  test("hovering a row at 800x900 keeps the list under the pointer", async ({ page }) => {
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await expect(page.locator("#dayStrip .day").first()).toBeVisible();
+    await page.waitForFunction(() => window.KMap && window.KMap.dayEvents().length > 0);
+
+    const rows = page.locator("#panelList .panelRow[data-id]");
+    await expect(rows.first()).toBeVisible();
+    expect(await rows.count()).toBeGreaterThan(1);
+
+    // the panel sits under the map at this width, so bring the row into view
+    // before measuring; scrolling after the measurement would fake a move
+    const target = rows.nth(1);
+    await target.scrollIntoViewIfNeeded();
+    const id = await target.getAttribute("data-id");
+    const before = await rowTops(page);
+
+    const box = await target.boundingBox();
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+
+    await expect(page.locator("#panelList .panelRow.sel")).toHaveAttribute("data-id", id);
+    expect(await rowTops(page)).toEqual(before);
+
+    // and the card that appeared is inside the panel, below the list
+    const geometry = await page.evaluate(() => {
+      const card = document.getElementById("panelDetail").getBoundingClientRect();
+      const panel = document.getElementById("eventPanel").getBoundingClientRect();
+      const list = document.getElementById("panelList").getBoundingClientRect();
+      return { cardBelowList: card.top >= list.bottom - 1, cardInsidePanel: card.bottom <= panel.bottom + 1 };
+    });
+    expect(geometry.cardBelowList).toBe(true);
+    expect(geometry.cardInsidePanel).toBe(true);
   });
 });
 

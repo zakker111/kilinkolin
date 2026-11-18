@@ -162,12 +162,12 @@ cd tests && npm ci && npx playwright install chromium && npm test
 
 The suite runs 18 Python model tests for calibration states, cap edges, dedupe, missing-time
 handling, TBA start options, competition cases and venue-collision allocation, plus 8 Python
-tests for the route-coverage and data-churn gates. It then runs 21 Playwright checks: switching
+tests for the route-coverage and data-churn gates. It then runs 22 Playwright checks: switching
 days, both ends of the hour slider, tapping a real map dot with a mouse and with a touch,
 duplicate-free data, TBA labels and spread window, capacity caps, the competition and venue-split
 panel rows, the "Why this number?" panel, the Liiga fitted-fill/backtest text, hovering a row
-without moving the list, tapping a phone row whose card is scrolled away, the phone Why sheet,
-and the day-bundle fallback. The build workflow runs it before deployment, then
+without moving the list at 1280×900 and at 800×900, tapping a phone row whose card is scrolled
+away, the phone Why sheet, and the day-bundle fallback. The build workflow runs it before deployment, then
 runs a separate live Pages smoke test after deployment.
 
 ## Deploy
