@@ -17,7 +17,7 @@
               hoverId: null, onHover: null, day: null, minutes: 19 * 60,
               aggVersion: 0, heatLayer: null, heatView: null, heatAggVersion: -1, heatQuality: -1,
               heatShapes: null, labelShapes: [], shapes: [], zooming: false, scrubbing: false,
-              worker: undefined, heatRequestId: 0, heatPendingKey: null, heatRequestMeta: null,
+              worker: undefined, heatRequestId: 0, heatRequestMeta: null,
               dayList: [], sortedLegs: null, sortedLegsVersion: -1,
               sortedVenues: null, sortedVenuesVersion: -1, fullFlows: false };
   const $ = (id) => document.getElementById(id);
@@ -587,11 +587,9 @@
         const meta = S.heatRequestMeta;
         clearTimeout(S.heatWatchdog);
         S.heatWatchdog = null;
-        S.heatPendingKey = null;
         S.heatRequestMeta = null;
         if (msg.error || !msg.bitmap) {
           stopHeatWorker("failed: " + (msg.error || "no bitmap"));
-          if (S.map) S.map.schedule();
           return;
         }
         if (S.heatLayer && S.heatLayer.close) S.heatLayer.close();
@@ -603,7 +601,6 @@
       };
       worker.onerror = (event) => {
         stopHeatWorker("error: " + (event.message || "script did not load"));
-        if (S.map) S.map.schedule();
       };
       S.worker = worker;
       return worker;
@@ -627,9 +624,9 @@
     }
     clearTimeout(S.heatWatchdog);
     S.heatWatchdog = null;
-    S.heatPendingKey = null;
     S.heatRequestMeta = null;
     if (reason) console.warn(`heat worker ${reason}; drawing the heat on the main thread`);
+    if (S.map) S.map.schedule();
   }
 
   /* One raster at a time. Every new view used to post another full raster while the
@@ -638,8 +635,7 @@
   function startHeatRender(map, width, height, quality, magnitude, view) {
     const worker = ensureHeatWorker();
     if (!worker) return false;
-    if (S.heatPendingKey != null) return true;
-    S.heatPendingKey = `${S.aggVersion}|${quality}|${map._z}|${map._scale}|${map._ox}|${map._oy}|${width}|${height}`;
+    if (S.heatRequestMeta != null) return true;
     const id = ++S.heatRequestId;
     S.heatRequestMeta = { view, aggVersion: S.aggVersion, quality };
     worker.postMessage({
@@ -651,9 +647,8 @@
     });
     clearTimeout(S.heatWatchdog);
     S.heatWatchdog = setTimeout(() => {
-      if (S.heatPendingKey == null) return;
+      if (!S.heatRequestMeta) return;
       stopHeatWorker(`did not answer in ${HEAT_WORKER_GRACE} ms`);
-      if (S.map) S.map.schedule();
     }, HEAT_WORKER_GRACE);
     return true;
   }
@@ -916,7 +911,6 @@
     S.heatRequestId += 1;
     clearTimeout(S.heatWatchdog);
     S.heatWatchdog = null;
-    S.heatPendingKey = null;
     S.heatRequestMeta = null;
     S.sortedLegs = null;
     S.sortedLegsVersion = -1;
