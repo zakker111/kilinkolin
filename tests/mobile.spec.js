@@ -153,7 +153,8 @@ test("the mobile Why sheet keeps the panel rows, scrolls, and dismisses", async 
   await expect(whyButton).toBeFocused();
 
   await expect(async () => {
-    await whyButton.click();
+    await rows.first().click();
+    await page.locator('#panelDetail .pd-why-btn').press('Enter');
     await expect(sheet).toBeVisible();
   }).toPass({ timeout: 5000 });
   await page.mouse.click(5, 5);
@@ -162,7 +163,8 @@ test("the mobile Why sheet keeps the panel rows, scrolls, and dismisses", async 
   await expect(whyButton).toBeFocused();
 
   await expect(async () => {
-    await whyButton.click();
+    await rows.first().click();
+    await page.locator('#panelDetail .pd-why-btn').press('Enter');
     await expect(sheet).toBeVisible();
   }).toPass({ timeout: 5000 });
   await page.keyboard.press("Escape");
