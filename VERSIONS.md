@@ -2,6 +2,27 @@
 
 ## App
 
+### 0.16.8 — 2026-11-18
+One simpler answer to the rows sliding under the pointer.
+
+- Changed: the event panel's detail card now sits **under** the row list on any layout with a
+  pointer. A card above the list grew over the rows and slid them ~100 px out from under the
+  pointer; a card below it can only take space from the list's bottom, so growing it never moves a
+  row. Measured at 1280×900: 0 px of row movement with the list at the top, at the bottom and
+  near the bottom, and 0 px again when the working expands (403 px of working, all of it visible).
+- Removed: the fixed 150 px slot, its inner scroll box, the `scrollTop` reset and the
+  `scrollIntoView` call in `app.js` that kept that scroll box usable. The list gains the space
+  back (598 px instead of 495 px at 1280×900, about 16 rows) and the selected card is never
+  clipped, so nothing has to be scrolled inside it.
+- Fixed: the same slide happened in pointer windows between 700 and 1000 px wide, where the panel
+  has no fixed height and the card stayed above the list; the card-under-list rule is keyed off
+  `html:not(.is-mobile)`, so it covers that range.
+- Changed: the idle hint now says the rows are above it on pointer layouts (`row above`), which is
+  where they are; phones keep the pinned card on top with the rows under it.
+- Verified: hover checks at 1280×900 and 800×900 (no row moves, the card stays inside the panel),
+  the working fully visible at 403 px, the phone checks at 390×844, the 21-check Playwright suite,
+  the 26 Python tests and the validator.
+
 ### 0.16.7 — 2026-11-18
 Keep the event rows still, and keep the event a phone taps in view.
 

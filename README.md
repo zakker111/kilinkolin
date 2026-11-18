@@ -4,7 +4,7 @@ An **estimated crowd-flow heat map** for events in Tampere: pick a day, drag the
 where the estimated crowd is on the streets at that moment. The map is the answer; the panel
 names what is on.
 
-Live: https://zakker111.github.io/kilinkolin/ · **v0.16.7** · model **2026.11.16** · schema **3**
+Live: https://zakker111.github.io/kilinkolin/ · **v0.16.8** · model **2026.11.16** · schema **3**
 
 ## What it does
 
@@ -15,8 +15,8 @@ Live: https://zakker111.github.io/kilinkolin/ · **v0.16.7** · model **2026.11.
 - **Day strip + hour scrubber** — 15-minute steps from 06:00 to 06:00 the next day. Moving the
   hour repaints the heat and updates the estimate.
 - **What's on** — the day's events in start order with venue and address, the event under the
-  pointer expanded in a card that holds its own slot so the rows never shift, and "occurring
-  now" / "soon" marks for the chosen hour.
+  pointer expanded in a card under the list (so the rows never shift), and "occurring now" /
+  "soon" marks for the chosen hour.
 - **Why this number?** — the expanded event shows the capacity and its source, the fill factor,
   the interest signals, the attendance band, the Liiga backtest error, any competition
   discount, and any shared-building venue split. The working is inspectable instead of hidden

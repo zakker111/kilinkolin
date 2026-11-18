@@ -107,19 +107,16 @@ test.describe("Kilinkolin smoke", () => {
   });
 
   test("hovering a row keeps the list under the pointer", async ({ page }) => {
-    // The detail card sits above the list and used to grow on hover (47px hint
-    // to a 116-164px card), sliding the rows down so the pointer ended over a
-    // neighbour. Hover a row and check that nothing moves.
+    // The detail card used to grow above the list on hover (a 52px hint to a
+    // 130-164px card), sliding the rows down so the pointer ended over a
+    // neighbour. Hover a row and check that the rows do not move.
     const rows = page.locator("#panelList .panelRow[data-id]");
     await expect(rows.first()).toBeVisible();
     expect(await rows.count()).toBeGreaterThan(1);
 
-    const geometry = () => page.evaluate(() => ({
-      rows: [...document.querySelectorAll("#panelList .panelRow[data-id]")]
-        .map((row) => Math.round(row.getBoundingClientRect().top)),
-      detail: Math.round(document.getElementById("panelDetail").getBoundingClientRect().height),
-    }));
-    const before = await geometry();
+    const rowTops = () => page.evaluate(() => [...document.querySelectorAll("#panelList .panelRow[data-id]")]
+      .map((row) => Math.round(row.getBoundingClientRect().top)));
+    const before = await rowTops();
 
     const target = rows.nth(1);
     const id = await target.getAttribute("data-id");
@@ -129,7 +126,7 @@ test.describe("Kilinkolin smoke", () => {
 
     await expect(page.locator("#panelList .panelRow.sel")).toHaveAttribute("data-id", id);
     expect((await page.locator("#panelDetail .pd-title").innerText()).trim()).toBe(title);
-    expect(await geometry()).toEqual(before);
+    expect(await rowTops()).toEqual(before);
 
     // the pointer is still over the row it selected, not a neighbour
     const under = await page.evaluate(() => {

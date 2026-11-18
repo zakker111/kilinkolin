@@ -2,6 +2,9 @@
 
 ## Done
 
+- [x] 0.16.8 simpler event panel: the detail card sits under the row list instead of in a fixed
+      slot, so neither the list nor the card needs a slot height, an inner scroll box or the two
+      `app.js` helpers that went with it, and pointer windows of 700-1000 px are covered too
 - [x] 0.16.7 stable event detail slot: hovering a row keeps the list in place instead of sliding
       it under the pointer and selecting a neighbour, and on phones the tapped event's card stays
       pinned at the top of the event panel instead of scrolling away above it, and a tapped map

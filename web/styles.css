@@ -144,6 +144,12 @@ main{position:relative;z-index:1;max-width:1240px;margin:0 auto;padding:0 16px 2
 .panel-detail{border:1px dashed var(--line);border-radius:9px;padding:8px 9px;margin-bottom:8px;
   font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--paper-dim);line-height:1.45;}
 .panel-detail.on{border-style:solid;border-color:rgba(239,232,216,.32);background:rgba(239,232,216,.05);color:var(--paper);}
+/* On any layout with a pointer the card sits under the row list. A card above
+   the list grew over the rows and slid them ~100px out from under the pointer;
+   below it, growth can only take space from the list's bottom, so no row moves
+   and no fixed slot or inner scroll box is needed. Phones (html.is-mobile) keep
+   the card pinned at the top, because their panel scrolls as one document. */
+html:not(.is-mobile) .panel-detail{order:3;flex:none;margin:8px 0 0;max-height:100%;overflow-y:auto;}
 .pd-title{font-family:'Inter',system-ui,sans-serif;font-weight:700;font-size:13px;line-height:1.3;}
 .pd-meta{margin-top:4px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:9.5px;color:var(--paper-dim);}
 .pd-est{color:var(--paper);}
@@ -209,15 +215,6 @@ main{position:relative;z-index:1;max-width:1240px;margin:0 auto;padding:0 16px 2
 @media(min-width:1000px){
   .mapRow{grid-template-columns:minmax(0,1fr) 320px;align-items:stretch;}
   .eventPanel{height:min(78vh,760px);}
-  /* The detail card grows from the one-line hint (52px) to the selected event
-     (median 130px, 95th percentile 147px, tallest 164px measured over 96
-     events), which slid the row list down and out from under the pointer. Pin
-     the slot so the rows never move: 150px fits every card but one, and that
-     one scrolls inside the slot. */
-  .panel-detail{height:150px;overflow-y:auto;overscroll-behavior:contain;}
-  /* idle: keep the reserved space but let it read as a detail pane, not an
-     empty box, so the list does not look like it is missing rows */
-  .panel-detail:not(.on){display:grid;place-items:center;text-align:center;border-color:transparent;}
 }
 
 footer{position:relative;z-index:1;max-width:1240px;margin:0 auto;padding:10px 16px 44px;

@@ -127,12 +127,10 @@
   function renderDetail(id) {
     const box = $("panelDetail");
     if (!box) return;
-    // the slot is a fixed height on desktop, so a new event starts at its top
-    box.scrollTop = 0;
     const ev = dayEvents.find((e) => e.id === id);
     if (!ev) {
       box.className = "panel-detail";
-      box.innerHTML = `<span class="pd-hint">${IS_MOBILE ? "Tap a dot on the map, or a row below, for that event." : "Hover a dot on the map, or a row below, for that event."}</span>`;
+      box.innerHTML = `<span class="pd-hint">${IS_MOBILE ? "Tap a dot on the map, or a row below, for that event." : "Hover a dot on the map, or a row above, for that event."}</span>`;
       return;
     }
     const timeUnknown = ev.timeKnown === false;
@@ -169,9 +167,6 @@
         panel.hidden = !open;
         whyBtn.setAttribute("aria-expanded", String(open));
         whyBtn.textContent = open ? "Hide the working" : whyLabel;
-        // the slot scrolls, so bring the working into view instead of leaving
-        // it below the fold where the click looks like it did nothing
-        if (open) panel.scrollIntoView({ block: "nearest" });
       });
     }
   }
