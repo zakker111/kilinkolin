@@ -77,6 +77,7 @@
         if (btn.disabled) return;
         btn.disabled = true;
         try {
+          stopPlay();
           const min = await window.KMap.setDay(btn.dataset.day);
           if (min == null) return;
           curDay = btn.dataset.day;
@@ -124,6 +125,95 @@
     return window.KMap.clockLabel(min) + (day ? ` +${day}` : "");
   }
 
+  /* ------------------------------------------------- directions and calendar
+     Directions is a plain keyless maps link to the venue's own published point;
+     walking, because the heat is people walking. The .ics is generated here, in
+     UTC, so no VTIMEZONE block is needed and every calendar app reads it. */
+  function directionsHref(ev) {
+    const venue = window.KMap.venue ? window.KMap.venue(ev.venueId) : null;
+    const lat = venue && Number(venue.lat), lon = venue && Number(venue.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+    return "https://www.google.com/maps/dir/?api=1&travelmode=walking" +
+      `&destination=${lat.toFixed(6)},${lon.toFixed(6)}`;
+  }
+
+  function icsEsc(value) {
+    return String(value == null ? "" : value)
+      .replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,")
+      .replace(/\r?\n/g, "\\n");
+  }
+
+  /* milliseconds Europe/Helsinki is ahead of UTC at that instant */
+  function helsinkiOffset(ms) {
+    const fmt = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Europe/Helsinki", hour12: false,
+      year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", second: "2-digit",
+    });
+    const parts = {};
+    fmt.formatToParts(new Date(ms)).forEach((part) => { parts[part.type] = part.value; });
+    // hour can read 24 for midnight in some engines
+    return Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour % 24, +parts.minute, +parts.second) - ms;
+  }
+
+  /* a wall-clock time on the shown day to the instant it happens; Date.UTC rolls
+     minutes past midnight into the next morning, so a 00:30 start lands right */
+  function helsinkiToUtc(day, minutes) {
+    const [y, m, d] = day.split("-").map(Number);
+    const guess = Date.UTC(y, m - 1, d, 0, minutes);
+    return new Date(guess - helsinkiOffset(guess));
+  }
+
+  function icsStamp(date) {
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${date.getUTCFullYear()}${pad(date.getUTCMonth() + 1)}${pad(date.getUTCDate())}T` +
+      `${pad(date.getUTCHours())}${pad(date.getUTCMinutes())}00Z`;
+  }
+
+  function icsText(ev) {
+    const venue = window.KMap.venue ? window.KMap.venue(ev.venueId) : null;
+    const start = helsinkiToUtc(curDay, ev.start);
+    const end = helsinkiToUtc(curDay, ev.end != null ? ev.end : ev.start + 120);
+    const where = [ev.venue, venue && venue.address].filter(Boolean).join(", ");
+    const estimate = ev.mid != null
+      ? `Estimated crowd ≈ ${ev.mid.toLocaleString("fi-FI")} people on the routes to this event — a model estimate, not a measurement.`
+      : "";
+    const page = location.origin + location.pathname;
+    return [
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "PRODID:-//Kilinkolin//estimated crowd flow//EN",
+      "CALSCALE:GREGORIAN",
+      "BEGIN:VEVENT",
+      `UID:kilinkolin-${icsEsc(ev.id)}-${curDay}@kilinkolin`,
+      `DTSTAMP:${icsStamp(new Date())}`,
+      `DTSTART:${icsStamp(start)}`,
+      `DTEND:${icsStamp(end)}`,
+      `SUMMARY:${icsEsc(ev.title)}`,
+      `LOCATION:${icsEsc(where)}`,
+      `DESCRIPTION:${icsEsc(estimate + " " + page)}`,
+      `URL:${page}`,
+      `CATEGORIES:${icsEsc(CAT_LABEL[ev.category] || "Event")}`,
+      "END:VEVENT",
+      "END:VCALENDAR",
+      "",
+    ].join("\r\n");
+  }
+
+  function downloadIcs(ev) {
+    const slug = String(ev.title).normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "event";
+    const url = URL.createObjectURL(new Blob([icsText(ev)], { type: "text/calendar;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `kilinkolin-${curDay}-${slug}.ics`;
+    link.style.display = "none";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
   function renderDetail(id) {
     const box = $("panelDetail");
     if (!box) return;
@@ -144,6 +234,13 @@
     const noCapacity = !!(ev.basis && ev.basis.capacity_unknown);
     const whyLabel = noCapacity ? "Why no estimate?" : "Why this number?";
     const why = ev.basis ? whyMarkup(ev) : "";
+    const dir = directionsHref(ev);
+    const actions = dir || ev.start != null
+      ? `<div class="pd-actions">` +
+        (dir ? `<a class="pd-act" href="${esc(dir)}" target="_blank" rel="noopener">Directions</a>` : "") +
+        (ev.start != null ? `<button class="pd-act" type="button" data-ics="${esc(ev.id)}">Add to calendar</button>` : "") +
+        `</div>`
+      : "";
     box.className = "panel-detail on";
     box.innerHTML =
       `<div class="pd-title">${esc(ev.title)}</div>` +
@@ -152,8 +249,11 @@
       `<div class="pd-meta"><span class="cat cat-${esc(ev.category)}">${esc(CAT_LABEL[ev.category] || "Event")}</span>` +
       `${ev.mid != null ? `<span class="pd-est">≈ ${ev.mid.toLocaleString("fi-FI")} people, estimated</span>` : noCapacity ? `<span class="pd-est">No crowd estimate · capacity unpublished</span>` : ""}</div>` +
       `<div class="pd-note">${timeNote}${noCapacity ? "Capacity is unpublished, so no crowd estimate is shown." : "Estimate, not a measurement."}</div>` +
+      actions +
       (ev.basis ? `<button class="pd-why-btn" type="button" aria-expanded="false" ${IS_MOBILE ? `aria-haspopup="dialog" aria-controls="whySheet"` : `aria-controls="${esc(whyId)}"`}>${whyLabel}</button>` +
         (IS_MOBILE ? "" : `<div class="pd-why" id="${esc(whyId)}" hidden>${why}</div>`) : "");
+    const icsBtn = box.querySelector("[data-ics]");
+    if (icsBtn) icsBtn.addEventListener("click", () => downloadIcs(ev));
     const whyBtn = box.querySelector(".pd-why-btn");
     if (whyBtn) {
       whyBtn.addEventListener("click", () => {
@@ -320,6 +420,43 @@
     });
   }
 
+  /* -------------------------------------------------------------- playback
+     The ▶ button walks the hour from 06:00 to 06:00 so the arrival and egress
+     curves can be watched. The map stays in scrubbing mode for the run. */
+  let playTimer = null;
+  let playing = false;
+
+  function stopPlay() {
+    if (playTimer) { clearInterval(playTimer); playTimer = null; }
+    if (playing) { playing = false; window.KMap.setScrubbing(false); }
+    const btn = $("timePlay");
+    if (btn) {
+      btn.textContent = "▶";
+      btn.classList.remove("playing");
+      btn.setAttribute("aria-label", "Play the day from 06:00 to 06:00");
+    }
+  }
+
+  function startPlay() {
+    if (playing) return;
+    playing = true;
+    window.KMap.setScrubbing(true);
+    const btn = $("timePlay");
+    if (btn) { btn.textContent = "⏸"; btn.classList.add("playing"); btn.setAttribute("aria-label", "Pause"); }
+    // an hour at 06:00 the next morning is the end of the day, so start over
+    let min = window.KMap.now() >= 1800 ? 360 : window.KMap.now();
+    window.KMap.setTime(min);
+    setTime(min, true);
+    updatePanelNow();
+    playTimer = setInterval(() => {
+      min += 15;
+      if (min > 1800) { stopPlay(); return; }
+      window.KMap.setTime(min);
+      setTime(min, true);
+      updatePanelNow();
+    }, 160);
+  }
+
   function renderStatus(meta) {
     const pill = $("updatedBadge");
     const generated = meta.generated ? Date.parse(meta.generated.replace(" UTC", "Z").replace(" ", "T")) : NaN;
@@ -408,7 +545,11 @@
 
     let queued = 0;
     let scrubTimer = 0;
+
+    $("timePlay").addEventListener("click", () => (playing ? stopPlay() : startPlay()));
+
     $("timeSlider").addEventListener("input", (e) => {
+      stopPlay();
       window.KMap.setScrubbing(true);
       setTime(+e.target.value, false);
       if (queued) cancelAnimationFrame(queued);
@@ -419,6 +560,19 @@
       });
       clearTimeout(scrubTimer);
       scrubTimer = setTimeout(() => window.KMap.setScrubbing(false), 160);
+    });
+
+    // A pasted or edited #hash moves the map itself; bring the day strip, the
+    // hour slider and the panel along with it instead of leaving them stale.
+    window.addEventListener("kmap:view", () => {
+      stopPlay();
+      const day = window.KMap.currentDay();
+      if (!day) return;
+      curDay = day;
+      markDay(day);
+      revealDay(document.querySelector(`.day[data-day="${day}"]`));
+      setTime(window.KMap.now(), true);
+      renderPanel();
     });
   }
 

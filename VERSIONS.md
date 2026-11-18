@@ -2,6 +2,55 @@
 
 ## App
 
+### 0.19.0 — 2026-11-18
+An event card you can act on: walking directions and a calendar file.
+
+- Added: "Directions" on every detail card opens a keyless maps link to that venue's own published
+  point (`google.com/maps/dir/?api=1&travelmode=walking&destination=lat,lon`), so a phone hands it
+  to the installed maps app and a desktop opens the directions tab. Walking, because the heat is
+  people walking.
+- Added: "Add to calendar" builds a one-event `.ics` in the page and downloads it as
+  `kilinkolin-<day>-<title>.ics`. Times are written as UTC stamps converted from Helsinki
+  wall-clock, so no `VTIMEZONE` block is needed and every calendar reads them; the description
+  carries the estimated crowd, labelled as an estimate, and the map's own address.
+- Added: a TBA event gets Directions but no calendar entry — a start time that is not published is
+  not invented for a file that would then sit in someone's day.
+- Verified: the card's directions link carries the venue point and the downloaded file opens in
+  the right hour when its UTC stamp is read back in Helsinki; a TBA card offers no calendar
+  button. 27 Playwright checks, the 26 Python tests and the validator.
+
+### 0.18.0 — 2026-11-18
+Play the day: a play button walks the hour from 06:00 to 06:00.
+
+- Added: the ▶ button beside the hour label steps the slider every 160 ms — 15 minutes per step,
+  so a whole day takes about 15 s — and the arrival and egress curves can be watched instead of
+  stepped. The button turns into ⏸ while it runs and back when it stops.
+- Added: playback starts from the hour already on screen, restarts at 06:00 when the slider is
+  already at 06:00 the next morning, and stops at the end. The map stays in its scrubbing mode for
+  the run (0.55-quality heat, low-DPR canvas) so the frames keep up, and stopping restores full
+  quality.
+- Added: a manual scrub, a day switch or a pasted hash stops playback, so the timer never fights
+  the controls it is animating.
+- Verified: the play button moves the slider forward and toggles ⏸/▶ in the Playwright suite;
+  26 Playwright checks, the 26 Python tests and the validator.
+
+### 0.17.0 — 2026-11-18
+A view can be linked: the day, hour, zoom and centre live in the URL hash.
+
+- Added: the address bar always carries the view as
+  `#d=2026-11-18&t=1095&z=13.20&c=61.49780,23.76100` — `d` the day, `t` minutes after midnight
+  (the slider's 360-1800 range), `z` the zoom and `c` the map centre as `lat,lon`, since a pan is
+  the centre moving. Opening a link restores that day, hour and camera; a day that is no longer
+  in the feed is ignored and the first day is shown instead.
+- Added: the hash is rewritten with `history.replaceState` ~180 ms after the view settles, so a
+  drag writes once instead of once per tick and the back button still leaves the page instead of
+  walking every hour of the evening. A pasted or edited hash moves the map, day strip, hour slider
+  and panel without a reload.
+- Verified: a link to the third day with `t=1380`, `z=14.60` and a shifted centre opens exactly
+  that view (slider at 1380, "23:00", that chip marked on), a pan at 19:15 writes `t=1155` plus the
+  moved centre and zoom, and reopening that hash lands on the same camera. 25 Playwright checks,
+  the 26 Python tests and the validator.
+
 ### 0.16.9 — 2026-11-18
 The heat comes back when the worker falls behind, and a dead worker no longer leaves a bare map.
 

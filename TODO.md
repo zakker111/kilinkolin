@@ -2,6 +2,13 @@
 
 ## Done
 
+- [x] 0.19.0 card actions: a "Directions" link to the venue's published point and a client-side
+      `.ics` download with UTC times converted from Helsinki wall-clock, offered only when the
+      start is published
+- [x] 0.18.0 playback: a ▶ button beside the hour label steps 06:00 to 06:00 every 160 ms, in
+      scrubbing quality, and stops on a manual scrub, a day switch or a hash change
+- [x] 0.17.0 shareable views: day, hour, zoom and centre in the URL hash, written with
+      `replaceState` after the view settles and applied on load or on a pasted hash
 - [x] 0.16.9 heat layer that survives a drag: one raster in flight instead of a queued raster per
       slider tick, and a 6 s watchdog that falls back to the main-thread renderer when the worker
       never answers

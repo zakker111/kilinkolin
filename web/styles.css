@@ -77,6 +77,12 @@ main{position:relative;z-index:1;max-width:1240px;margin:0 auto;padding:0 16px 2
 .time:focus-visible{outline:2px solid var(--amber);outline-offset:4px;border-radius:999px;}
 .timeLabel{font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;min-width:44px;text-align:right;
   font-variant-numeric:tabular-nums;}
+.timePlay{width:30px;height:30px;flex:none;border-radius:50%;border:1px solid var(--line);
+  background:var(--ink-2);color:var(--paper);font-size:11px;line-height:1;cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center;transition:background .15s ease,border-color .15s ease,transform .15s ease;}
+.timePlay:hover{border-color:rgba(239,232,216,.34);transform:scale(1.06);}
+.timePlay:active{transform:scale(.96);}
+.timePlay.playing{background:var(--brick);border-color:var(--brick);}
 
 .mapWrap{position:relative;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#e7e2d6;
   box-shadow:0 18px 44px rgba(0,0,0,.28);}
@@ -155,6 +161,14 @@ html:not(.is-mobile) .panel-detail{order:3;flex:none;margin:8px 0 0;max-height:1
 .pd-est{color:var(--paper);}
 .pd-note{margin-top:5px;font-size:9px;color:var(--amber);}
 .pd-hint{font-size:9.5px;}
+.pd-actions{margin-top:7px;display:flex;gap:6px;flex-wrap:wrap;}
+.pd-act{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border:1px solid rgba(239,232,216,.28);
+  border-radius:6px;background:rgba(239,232,216,.06);color:var(--paper);text-decoration:none;
+  font-family:'IBM Plex Mono',monospace;font-size:8.5px;letter-spacing:.03em;cursor:pointer;}
+.pd-act:hover{border-color:rgba(239,232,216,.55);background:rgba(239,232,216,.11);}
+.pd-act:focus-visible{outline:2px solid var(--amber);outline-offset:2px;}
+.pd-act::before{content:"↗";font-size:9px;color:var(--teal);}
+.pd-act[data-ics]::before{content:"+";}
 .pd-why-btn{margin-top:7px;padding:3px 7px;border:1px solid rgba(239,232,216,.28);border-radius:6px;
   background:rgba(239,232,216,.06);color:var(--paper);font-family:'IBM Plex Mono',monospace;
   font-size:8.5px;letter-spacing:.03em;cursor:pointer;}
@@ -272,6 +286,7 @@ footer a{color:var(--amber);text-decoration:underline;}
   .pd-note{font-size:10px;}
   .pd-hint{font-size:10.5px;}
   .pd-why-btn{font-size:10px;padding:5px 8px;min-height:40px;}
+  .pd-act{font-size:9.5px;padding:5px 9px;min-height:38px;}
   .why-row>span:first-child{font-size:9.5px;}
   .why-row b{font-size:11px;}
   .why-row small{font-size:9px;}

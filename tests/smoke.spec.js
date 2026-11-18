@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { readFile } from "node:fs/promises";
 
 // Rows are pointer targets that can move: the detail card above the list once
 // grew on hover, and the list is rebuilt when a day's bundle arrives, so a
@@ -190,6 +191,9 @@ test.describe("Kilinkolin smoke", () => {
     await activateRow(page, missing.id);
     await expect(page.locator("#panelDetail .pd-meta").first()).toContainText("Start TBA");
     await expect(page.locator("#panelDetail .pd-note").first()).toContainText("spread over 18:00–20:00");
+    // no invented start: a TBA row gets directions, never a calendar entry
+    await expect(page.locator("#panelDetail a.pd-act")).toHaveText("Directions");
+    await expect(page.locator("#panelDetail [data-ics]")).toHaveCount(0);
   });
 
   test("a TBA event's heat is spread across its documented window", async ({ page }) => {
@@ -457,6 +461,132 @@ test.describe("the heat layer", () => {
     await page.waitForFunction(() => window.KMap && window.KMap.dayEvents().length > 0);
     await expect.poll(() => heatPixels(page), { timeout: 20000, intervals: [250] }).toBeGreaterThan(300);
     expect(await page.evaluate(() => window.KMap.renderer())).toBe("main");
+  });
+});
+
+test.describe("share links", () => {
+  test("a link opens its day, hour, zoom and centre, and the address bar follows the view", async ({ page }) => {
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await expect(page.locator("#dayStrip .day").first()).toBeVisible();
+    await page.waitForFunction(() => window.KMap && window.KMap.dayEvents().length > 0);
+
+    const days = await page.evaluate(() => [...document.querySelectorAll(".day")].map((b) => b.dataset.day));
+    expect(days.length).toBeGreaterThan(2);
+    const day = days[2];
+
+    await page.goto(`/#d=${day}&t=1380&z=14.60&c=61.49230,23.77120`, { waitUntil: "domcontentloaded" });
+    await page.waitForFunction((d) => window.KMap && window.KMap.currentDay() === d, day);
+
+    const opened = await page.evaluate(() => ({
+      ...window.KMap.view(),
+      slider: document.getElementById("timeSlider").value,
+      label: document.getElementById("timeLabel").textContent,
+      chip: (document.querySelector(".day.on") || {}).dataset && document.querySelector(".day.on").dataset.day,
+    }));
+    expect(opened.minutes).toBe(1380);
+    expect(opened.slider).toBe("1380");
+    expect(opened.label).toBe("23:00");
+    expect(opened.chip).toBe(day);
+    expect(opened.zoom).toBeCloseTo(14.6, 2);
+    expect(opened.lat).toBeCloseTo(61.4923, 4);
+    expect(opened.lon).toBeCloseTo(23.7712, 4);
+
+    // the address bar tracks what is on screen, so any moment is shareable
+    await page.evaluate(() => window.KMap.setTime(19 * 60 + 15));
+    await expect.poll(() => page.evaluate(() => location.hash)).toContain("t=1155");
+
+    // and a pan is written as the centre moving
+    const before = await page.evaluate(() => window.KMap.view());
+    const box = await page.locator("#mapCanvas").boundingBox();
+    const from = { x: box.x + box.width * 0.5, y: box.y + box.height * 0.6 };
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    await page.mouse.move(from.x - 80, from.y - 50, { steps: 6 });
+    await page.mouse.up();
+    await page.waitForFunction((lat) => Math.abs(window.KMap.view().lat - lat) > 1e-4, before.lat);
+
+    const moved = await page.evaluate(() => window.KMap.view());
+    const expected = `d=${day}&t=1155&z=${moved.zoom.toFixed(2)}&c=${moved.lat.toFixed(5)},${moved.lon.toFixed(5)}`;
+    await expect.poll(() => page.evaluate(() => location.hash)).toBe(`#${expected}`);
+
+    // reopening that link lands on the same panned view
+    await page.goto(`/#${expected}`, { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => window.KMap && window.KMap.dayEvents().length > 0);
+    const again = await page.evaluate(() => window.KMap.view());
+    expect(again.minutes).toBe(1155);
+    expect(again.zoom).toBeCloseTo(moved.zoom, 2);
+    expect(again.lat).toBeCloseTo(moved.lat, 4);
+    expect(again.lon).toBeCloseTo(moved.lon, 4);
+  });
+});
+
+test.describe("event card actions", () => {
+  test("a timed event links walking directions and downloads a calendar file", async ({ page }) => {
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await expect(page.locator("#dayStrip .day").first()).toBeVisible();
+    await page.waitForFunction(() => window.KMap && window.KMap.dayEvents().length > 0);
+
+    const ev = await page.evaluate(() => {
+      const event = window.KMap.dayEvents().find((e) => e.start != null && e.venueId);
+      const venue = window.KMap.venue(event.venueId) || {};
+      return { id: event.id, title: event.title, time: event.time, venue: event.venue,
+               address: venue.address || "", lat: Number(venue.lat), lon: Number(venue.lon),
+               day: window.KMap.currentDay() };
+    });
+    await activateRow(page, ev.id);
+
+    const dir = page.locator("#panelDetail a.pd-act");
+    await expect(dir).toHaveText("Directions");
+    expect(await dir.getAttribute("target")).toBe("_blank");
+    const href = await dir.getAttribute("href");
+    expect(href).toContain("travelmode=walking");
+    expect(href).toContain(`destination=${ev.lat.toFixed(6)},${ev.lon.toFixed(6)}`);
+
+    const [download] = await Promise.all([
+      page.waitForEvent("download"),
+      page.locator("#panelDetail [data-ics]").click(),
+    ]);
+    expect(download.suggestedFilename()).toMatch(/^kilinkolin-\d{4}-\d{2}-\d{2}-[a-z0-9-]+\.ics$/);
+
+    const body = (await readFile(await download.path(), "utf8"));
+    const plain = body.replace(/\\,/g, ",").replace(/\\;/g, ";");
+    expect(body).toContain("BEGIN:VCALENDAR");
+    expect(body).toContain("VERSION:2.0");
+    expect(body).toContain("BEGIN:VEVENT");
+    expect(body).toContain("END:VCALENDAR");
+    expect(plain).toContain(`SUMMARY:${ev.title}`);
+    expect(plain).toContain(`LOCATION:${ev.venue}`);
+    expect(plain).toContain(ev.address);
+
+    // the stamp is UTC; read it back in Helsinki and it must be the card's hour
+    const start = body.match(/DTSTART:(\d{8})T(\d{2})(\d{2})(\d{2})Z/);
+    const end = body.match(/DTEND:(\d{8})T(\d{2})(\d{2})(\d{2})Z/);
+    expect(start, "DTSTART must be a UTC stamp").not.toBeNull();
+    expect(end, "DTEND must be a UTC stamp").not.toBeNull();
+    expect(start[1]).toBe(ev.day.replace(/-/g, ""));
+    const toIso = (m) => `${m[1].slice(0, 4)}-${m[1].slice(4, 6)}-${m[1].slice(6, 8)}T${m[2]}:${m[3]}:00Z`;
+    const clock = (iso) => new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Europe/Helsinki", hour: "2-digit", minute: "2-digit", hour12: false,
+    }).format(new Date(iso));
+    expect(clock(toIso(start))).toBe(ev.time);
+    expect(new Date(toIso(end)).getTime()).toBeGreaterThan(new Date(toIso(start)).getTime());
+  });
+});
+
+test.describe("playback", () => {
+  test("the play button walks the hour forward and pauses again", async ({ page }) => {
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await expect(page.locator("#dayStrip .day").first()).toBeVisible();
+    await page.waitForFunction(() => window.KMap && window.KMap.dayEvents().length > 0);
+
+    const before = await page.evaluate(() => document.getElementById("timeSlider").value);
+    await page.locator("#timePlay").click();
+    await expect(page.locator("#timePlay")).toHaveText("⏸");
+    await page.waitForTimeout(400);
+    const during = await page.evaluate(() => document.getElementById("timeSlider").value);
+    expect(Number(during)).toBeGreaterThan(Number(before));
+    await page.locator("#timePlay").click();
+    await expect(page.locator("#timePlay")).toHaveText("▶");
   });
 });
 

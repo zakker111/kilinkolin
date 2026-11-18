@@ -178,6 +178,31 @@ matching event.
 Feeds are not row-capped. A source that returns more events must publish all of them; silently
 truncating a sorted feed on every run would make the missing tail permanent.
 
+The ▶ button beside the hour label (`#timePlay`) plays the day: it steps the slider 15 minutes
+every 160 ms from 06:00 to 06:00 (about 15 s), holds the map in scrubbing mode for the run so the
+frames keep up, restarts at 06:00 when the slider is already at the end, and stops on a manual
+scrub, a day switch or a hash change. It is a control for watching the arrival and egress curves,
+so keep it in step with the slider: `setTime(min, true)` and `updatePanelNow()` each step.
+
+A detail card offers two actions, both built by `app.js` with no network and no key: "Directions"
+links to `https://www.google.com/maps/dir/?api=1&travelmode=walking&destination=<lat>,<lon>` for the
+venue's own published point, and "Add to calendar" downloads a single-event `.ics` it generates in
+the page. The calendar file writes `DTSTART`/`DTEND` as UTC stamps converted from Helsinki
+wall-clock by `helsinkiToUtc()`, so it needs no `VTIMEZONE` block; its description carries the
+estimated crowd and must keep saying the number is an estimate. A TBA event has no published
+start, so it gets Directions but no calendar button — never put a made-up 19:00 in someone's
+calendar.
+
+The view is in the URL hash so a link reopens it:
+`#d=2026-11-18&t=1095&z=13.20&c=61.49780,23.76100` (`d` day, `t` minutes after midnight in the
+slider's 360-1800 range, `z` zoom, `c` centre as `lat,lon`). `map.js` reads it in `init()` (only
+a day present in the feed is honoured), applies later `hashchange` in `applyHash()`, and writes it
+with `history.replaceState` ~180 ms after the view settles — never `pushState`, so the back button
+keeps meaning "the page before" instead of walking every hour of the evening. `refresh()` and
+the tile map's `endInteraction` are the only things that schedule a write, so a day, hour, pan or
+zoom change reaches the address bar without a new state hook. `KMap.view()` returns what the hash
+encodes.
+
 `map.js` sets `html.is-mobile` from `(max-width: 700px)` or a coarse pointer up to 1024px. On a
 phone it caps canvas DPR at 1.75 (2 on desktop), samples fewer heat points and draws four map
 labels; the CSS uses a 50dvh map (clamped 280-520px) and hides the duplicate legend swatches.

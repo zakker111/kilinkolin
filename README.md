@@ -4,7 +4,7 @@ An **estimated crowd-flow heat map** for events in Tampere: pick a day, drag the
 where the estimated crowd is on the streets at that moment. The map is the answer; the panel
 names what is on.
 
-Live: https://zakker111.github.io/kilinkolin/ · **v0.16.9** · model **2026.11.16** · schema **3**
+Live: https://zakker111.github.io/kilinkolin/ · **v0.19.0** · model **2026.11.16** · schema **3**
 
 ## What it does
 
@@ -15,7 +15,11 @@ Live: https://zakker111.github.io/kilinkolin/ · **v0.16.9** · model **2026.11.
 - **Arrivals and departures** — the heat includes people walking to events and people leaving
   them, so a venue keeps its crowd through the evening instead of going dark at the start.
 - **Day strip + hour scrubber** — 15-minute steps from 06:00 to 06:00 the next day. Moving the
-  hour repaints the heat and updates the estimate.
+  hour repaints the heat and updates the estimate. **▶** plays the whole day in about 15 s, so the
+  arrivals and the walk home can be watched instead of stepped.
+- **Shareable views** — the day, hour, zoom and map centre live in the URL hash
+  (`#d=2026-11-18&t=1095&z=13.20&c=61.49780,23.76100`), so a link reopens exactly what someone
+  was looking at, and the address bar follows the view as it changes.
 - **What's on** — the day's events in start order with venue and address, the event under the
   pointer expanded in a card under the list (so the rows never shift), and "occurring now" /
   "soon" marks for the chosen hour.
@@ -164,14 +168,16 @@ cd tests && npm ci && npx playwright install chromium && npm test
 
 The suite runs 18 Python model tests for calibration states, cap edges, dedupe, missing-time
 handling, TBA start options, competition cases and venue-collision allocation, plus 8 Python
-tests for the route-coverage and data-churn gates. It then runs 24 Playwright checks: switching
+tests for the route-coverage and data-churn gates. It then runs 27 Playwright checks: switching
 days, both ends of the hour slider, tapping a real map dot with a mouse and with a touch,
 duplicate-free data, TBA labels and spread window, capacity caps, the competition and venue-split
 panel rows, the "Why this number?" panel, the Liiga fitted-fill/backtest text, hovering a row
 without moving the list at 1280×900 and at 800×900, tapping a phone row whose card is scrolled
 away, the phone Why sheet, the day-bundle fallback, a dragged hour slider bringing the heat back
 without queueing a raster per step, and a heat worker that never answers falling back to the
-main thread. The build workflow runs it before deployment, then
+main thread, a shared `#hash` link opening its day, hour, zoom and centre, the play button walking
+the hour forward and pausing again, and an event card's walking-directions link and downloaded
+`.ics` (whose UTC start reads back as the card's Helsinki hour). The build workflow runs it before deployment, then
 runs a separate live Pages smoke test after deployment.
 
 ## Deploy

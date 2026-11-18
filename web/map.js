@@ -66,6 +66,7 @@
       this.setLowRes(true);
     }
     endInteraction(delay = 120) {
+      if (this.onMove) this.onMove();
       clearTimeout(this._lowTimer);
       this._lowTimer = setTimeout(() => this.setLowRes(false), delay);
     }
@@ -862,12 +863,99 @@
       <div class="e-note">Estimate, not a measurement.</div>`;
   }
 
+  /* ------------------------------------------------------------ share links
+     The view lives in the hash so a link reopens it:
+       #d=2026-11-18&t=1095&z=13.20&c=61.49780,23.76100
+     `d` is the day, `t` minutes after midnight (the slider's 360-1800 range),
+     `z` the zoom and `c` the map centre as lat,lon — a pan is the centre moving. */
+  const HASH_MIN = 360, HASH_MAX = 1800, HASH_STEP = 15;
+  let hashTimer = null;
+
+  function hashState() {
+    const parts = [];
+    if (S.day) parts.push(`d=${S.day}`);
+    parts.push(`t=${Math.round(S.minutes)}`);
+    if (S.map) {
+      parts.push(`z=${S.map.zoom.toFixed(2)}`);
+      parts.push(`c=${S.map.center.lat.toFixed(5)},${S.map.center.lon.toFixed(5)}`);
+    }
+    return "#" + parts.join("&");
+  }
+
+  function readHash() {
+    const raw = (location.hash || "").replace(/^#/, "");
+    if (!raw) return null;
+    const out = {};
+    raw.split("&").forEach((pair) => {
+      const at = pair.indexOf("=");
+      if (at < 0) return;
+      const key = pair.slice(0, at);
+      let value;
+      try { value = decodeURIComponent(pair.slice(at + 1)); } catch (err) { return; }
+      if (key === "d" && /^\d{4}-\d{2}-\d{2}$/.test(value)) out.day = value;
+      else if (key === "t" && value !== "") {
+        const n = Number(value);
+        if (Number.isFinite(n)) out.minutes = n;
+      } else if (key === "z" && value !== "") {
+        const n = Number(value);
+        if (Number.isFinite(n)) out.zoom = n;
+      } else if (key === "c") {
+        const [lat, lon] = value.split(",").map(Number);
+        if (Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 85 && Math.abs(lon) <= 180) {
+          out.center = { lat, lon };
+        }
+      }
+    });
+    return out;
+  }
+
+  function clampMinutes(min) {
+    return Math.min(HASH_MAX, Math.max(HASH_MIN, Math.round(min / HASH_STEP) * HASH_STEP));
+  }
+
+  function writeHash() {
+    clearTimeout(hashTimer);
+    hashTimer = null;
+    const next = hashState();
+    if (location.hash === next) return;
+    try { history.replaceState(history.state, "", next); } catch (err) { /* some webviews refuse */ }
+  }
+
+  /* One write per drag, not one per tick, and a replace so the back button keeps
+     meaning "the page before" instead of walking every hour of the evening. */
+  function scheduleHash() {
+    clearTimeout(hashTimer);
+    hashTimer = setTimeout(writeHash, 180);
+  }
+
+  /* A hash that arrives after load (pasted, edited, back/forward) moves the view. */
+  async function applyHash() {
+    const want = readHash();
+    if (!want) return;
+    let moved = false;
+    if (want.day && want.day !== S.day && S.events.some((ev) => ev.date === want.day)) {
+      if (await loadFlows(want.day)) {
+        S.day = want.day;
+        S.minutes = peakMinute(want.day);
+        moved = true;
+      }
+    }
+    if (want.center) { S.map.setCenter(want.center.lat, want.center.lon, want.zoom); moved = true; }
+    else if (want.zoom != null) { S.map.setCenter(S.map.center.lat, S.map.center.lon, want.zoom); moved = true; }
+    if (want.minutes != null) { S.minutes = clampMinutes(want.minutes); moved = true; }
+    if (!moved) return;
+    refresh();
+    writeHash();
+    window.dispatchEvent(new CustomEvent("kmap:view"));
+  }
+
   function refresh() {
     S.dayList = S.events.filter((ev) => ev.date === S.day);
     S.agg = aggregate();
     S.aggVersion += 1;
     if (S.map) S.map.schedule();
     renderEstimate();
+    scheduleHash();
   }
 
   function setScrubbing(on) {
@@ -967,8 +1055,11 @@
   async function init(events) {
     S.events = events || [];
     wire();
+    const want = readHash();
     const days = [...new Set(S.events.map((e) => e.date))].sort();
     S.day = days[0] || null;
+    // a shared link wins over the first day, but only if that day still exists
+    if (want && want.day && days.includes(want.day)) S.day = want.day;
     try {
       const venues = await fetch("./geo/venues.json").then((r) => r.json());
       (venues.venues || []).forEach((v) => { S.venues[v.id] = v; });
@@ -989,12 +1080,19 @@
       if (id !== S.hoverId) { S.hoverId = id; if (S.onHover) S.onHover(id); S.map.schedule(); }
     };
     S.hideTip = () => { const t = $("eventTip"); if (t) t.hidden = true; };
-    S.map.setCenter(61.4978, 23.7610, 13.2);
+    if (want && want.center) S.map.setCenter(want.center.lat, want.center.lon, want.zoom);
+    else if (want && want.zoom != null) S.map.setCenter(S.map.center.lat, S.map.center.lon, want.zoom);
+    else S.map.setCenter(61.4978, 23.7610, 13.2);
+    S.map.onMove = scheduleHash;
     S.map.schedule();
 
     S.minutes = 19 * 60;
     if (S.day) S.minutes = peakMinute(S.day);
+    if (want && want.minutes != null) S.minutes = clampMinutes(want.minutes);
     refresh();
+    // normalise the address bar so it is shareable from the first frame
+    writeHash();
+    window.addEventListener("hashchange", () => { void applyHash(); });
   }
 
   window.KMap = {
@@ -1002,6 +1100,12 @@
     onHover(cb) { S.onHover = cb; },
     currentDay() { return S.day; },
     now() { return S.minutes; },
+    /* the view the hash encodes: day, minutes, and the camera */
+    view() {
+      const map = S.map;
+      return { day: S.day, minutes: S.minutes, zoom: map ? map.zoom : null,
+               lat: map ? map.center.lat : null, lon: map ? map.center.lon : null };
+    },
     renderer() { return S.worker ? "worker" : "main"; },
     venue(id) { return S.venues[id] || null; },
     /* every event on the chosen day, with the minutes the map uses */
