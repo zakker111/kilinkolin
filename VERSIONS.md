@@ -2,6 +2,25 @@
 
 ## App
 
+### 0.16.9 — 2026-11-18
+The heat comes back when the worker falls behind, and a dead worker no longer leaves a bare map.
+
+- Fixed: the heat layer could vanish and stay away after switching days or dragging the hour
+  slider. Every new view posted another full padded raster to the heat worker while the earlier
+  ones were still queued, so a drag queued one raster per 15-minute step and the newest view waited
+  behind all of them; the main thread deliberately draws no heat until the reply arrives.
+  Measured at 1280×900 after 12 day switches and a 45-step drag: 445 rasters posted, 60 still
+  queued, and the heat absent for ~10 s after the drag stopped.
+- Changed: one raster is in flight at a time. A newer view waits for the current reply, and the
+  repaint that follows posts the newest state, so a drag costs one raster per raster completed
+  instead of one per tick (221 posts, 221 replies in the same run) and the heat returns at once.
+- Fixed: a worker that never answers (killed for memory, blocked, wedged) left the map without
+  heat for the rest of the session and logged nothing. A 6 s watchdog now stops it, warns once and
+  lets the synchronous renderer draw; the worker's error paths share the same `stopHeatWorker`.
+- Verified: 8 fresh loads at 5239 heat pixels each, the stress run returning heat immediately, a
+  worker that never answers painting on the main thread, 24 Playwright checks, the 26 Python tests
+  and the validator.
+
 ### 0.16.8 — 2026-11-18
 One simpler answer to the rows sliding under the pointer.
 

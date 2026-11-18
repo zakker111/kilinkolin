@@ -2,6 +2,9 @@
 
 ## Done
 
+- [x] 0.16.9 heat layer that survives a drag: one raster in flight instead of a queued raster per
+      slider tick, and a 6 s watchdog that falls back to the main-thread renderer when the worker
+      never answers
 - [x] 0.16.8 simpler event panel: the detail card sits under the row list instead of in a fixed
       slot, so neither the list nor the card needs a slot height, an inner scroll box or the two
       `app.js` helpers that went with it, and pointer windows of 700-1000 px are covered too

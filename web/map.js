@@ -585,12 +585,12 @@
           return;
         }
         const meta = S.heatRequestMeta;
+        clearTimeout(S.heatWatchdog);
+        S.heatWatchdog = null;
         S.heatPendingKey = null;
         S.heatRequestMeta = null;
         if (msg.error || !msg.bitmap) {
-          console.warn("heat worker failed, using main-thread fallback", msg.error || "no bitmap");
-          worker.terminate();
-          S.worker = null;
+          stopHeatWorker("failed: " + (msg.error || "no bitmap"));
           if (S.map) S.map.schedule();
           return;
         }
@@ -602,11 +602,7 @@
         if (S.map) S.map.schedule();
       };
       worker.onerror = (event) => {
-        console.warn("heat worker error, using main-thread fallback", event.message || event);
-        worker.terminate();
-        S.worker = null;
-        S.heatPendingKey = null;
-        S.heatRequestMeta = null;
+        stopHeatWorker("error: " + (event.message || "script did not load"));
         if (S.map) S.map.schedule();
       };
       S.worker = worker;
@@ -618,13 +614,33 @@
     }
   }
 
+  /* A raster takes tens of milliseconds. This long means the worker is not coming
+     back (killed for memory, blocked, wedged) and the main thread has to draw. */
+  const HEAT_WORKER_GRACE = 6000;
+
+  /* Give up on the worker for the rest of the session: the main-thread renderer
+     always produces the heat, it just does it on the main thread. */
+  function stopHeatWorker(reason) {
+    if (S.worker) {
+      try { S.worker.terminate(); } catch (err) { /* already gone */ }
+      S.worker = null;
+    }
+    clearTimeout(S.heatWatchdog);
+    S.heatWatchdog = null;
+    S.heatPendingKey = null;
+    S.heatRequestMeta = null;
+    if (reason) console.warn(`heat worker ${reason}; drawing the heat on the main thread`);
+  }
+
+  /* One raster at a time. Every new view used to post another full raster while the
+     earlier ones were still queued, so a dragged hour slider left the worker chewing
+     through a minute of superseded work and the map showed no heat until it caught up. */
   function startHeatRender(map, width, height, quality, magnitude, view) {
     const worker = ensureHeatWorker();
     if (!worker) return false;
-    const key = `${S.aggVersion}|${quality}|${map._z}|${map._scale}|${map._ox}|${map._oy}|${width}|${height}`;
-    if (S.heatPendingKey === key) return true;
+    if (S.heatPendingKey != null) return true;
+    S.heatPendingKey = `${S.aggVersion}|${quality}|${map._z}|${map._scale}|${map._ox}|${map._oy}|${width}|${height}`;
     const id = ++S.heatRequestId;
-    S.heatPendingKey = key;
     S.heatRequestMeta = { view, aggVersion: S.aggVersion, quality };
     worker.postMessage({
       id, width, height, zoom: map.zoom, quality, magnitude,
@@ -633,6 +649,12 @@
         pts: s.pts.map((p) => [p.x, p.y]),
       })),
     });
+    clearTimeout(S.heatWatchdog);
+    S.heatWatchdog = setTimeout(() => {
+      if (S.heatPendingKey == null) return;
+      stopHeatWorker(`did not answer in ${HEAT_WORKER_GRACE} ms`);
+      if (S.map) S.map.schedule();
+    }, HEAT_WORKER_GRACE);
     return true;
   }
 
@@ -892,6 +914,8 @@
     S.heatAggVersion = -1;
     S.heatQuality = -1;
     S.heatRequestId += 1;
+    clearTimeout(S.heatWatchdog);
+    S.heatWatchdog = null;
     S.heatPendingKey = null;
     S.heatRequestMeta = null;
     S.sortedLegs = null;

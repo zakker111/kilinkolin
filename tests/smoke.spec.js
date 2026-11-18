@@ -410,6 +410,56 @@ test.describe("a pointer window narrower than the desktop grid", () => {
   });
 });
 
+// The heat is rasterised in a worker and the main thread draws none while it waits for
+// the reply, so a raster per slider tick queued a minute of superseded work behind the
+// newest view and the map stayed without heat after a drag.
+const heatPixels = (page) => page.evaluate(() => {
+  const canvas = document.getElementById("mapCanvas");
+  const data = canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height).data;
+  let hot = 0;
+  for (let i = 0; i < data.length; i += 4 * 9) {
+    const r = data[i], g = data[i + 1], b = data[i + 2];
+    if (r > 140 && r - g > 35 && g - b > 0 && b < 120) hot += 1;
+  }
+  return hot;
+});
+
+test.describe("the heat layer", () => {
+  test("dragging the hour slider brings the heat back at once", async ({ page }) => {
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await expect(page.locator("#dayStrip .day").first()).toBeVisible();
+    await page.waitForFunction(() => window.KMap && window.KMap.dayEvents().length > 0);
+    const peak = await page.evaluate(() => window.KMap.now());
+    await expect.poll(() => heatPixels(page), { timeout: 15000 }).toBeGreaterThan(300);
+
+    // a quiet hour first, so "heat is back" cannot pass on the previous frame
+    await page.evaluate(() => window.KMap.setTime(6 * 60));
+    await expect.poll(() => heatPixels(page), { timeout: 10000 }).toBeLessThan(100);
+
+    for (let minute = 12 * 60; minute <= 22 * 60; minute += 15) {
+      await page.evaluate((m) => window.KMap.setTime(m), minute);
+      await page.waitForTimeout(25);
+    }
+
+    // the raster for the restored hour must not sit behind ~40 superseded ones
+    const started = Date.now();
+    await page.evaluate((m) => window.KMap.setTime(m), peak);
+    await expect.poll(() => heatPixels(page), { timeout: 15000, intervals: [100] }).toBeGreaterThan(300);
+    expect(Date.now() - started).toBeLessThan(3000);
+  });
+
+  test("a heat worker that never answers still shows the heat", async ({ page }) => {
+    await page.route("**/heat-worker.js", (route) => route.fulfill({
+      contentType: "application/javascript",
+      body: "self.onmessage = function () {};",
+    }));
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => window.KMap && window.KMap.dayEvents().length > 0);
+    await expect.poll(() => heatPixels(page), { timeout: 20000, intervals: [250] }).toBeGreaterThan(300);
+    expect(await page.evaluate(() => window.KMap.renderer())).toBe("main");
+  });
+});
+
 test.describe("calibration states", () => {
   test("an insufficient sample says it is too small to fit", async ({ page }) => {
     await openHockeyWithCalibration(page, (cal) => {

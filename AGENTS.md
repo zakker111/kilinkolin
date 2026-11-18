@@ -185,6 +185,14 @@ On phones the event's "Why" detail opens in a modal bottom sheet so the panel ro
 the sheet body is the only scroll area. Desktop keeps the inline disclosure.
 Keep phone checks to a 390x844 touch viewport.
 
+The heat raster comes from `heat-worker.js` on an `OffscreenCanvas`, and `paintFlow` draws no heat
+while a request is in flight, so `startHeatRender` keeps exactly one raster in flight: a newer view
+waits for the current reply and the repaint after it posts the newest state. Posting per slider
+tick queues a raster per 15-minute step and the map stays heat-less until the worker drains them
+(measured: ~10 s after a drag). A worker that says nothing for `HEAT_WORKER_GRACE` (6 s) is
+treated as gone: `stopHeatWorker` terminates it and the synchronous renderer draws for the rest of
+the session, with one warning in the console.
+
 On any layout with a pointer (`html:not(.is-mobile)`) the event panel's detail card sits under the
 row list: a card above the list grew over the rows and slid them out from under the pointer, while
 a card below it can only take space from the list's bottom, so no row moves and no fixed slot or
