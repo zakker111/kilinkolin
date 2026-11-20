@@ -110,6 +110,52 @@ test.describe("Kilinkolin smoke", () => {
     await expect(page.locator("#weekChip")).toHaveAttribute("title", /published 15-minute slots/);
   });
 
+  test("every day bundle's build-time people curve matches the browser model", async ({ page }) => {
+    // `build.py` and `map.js` carry the same enRoute rule in two languages: Python
+    // writes each day's `people[]` curve, the browser recomputes it for the sparkline
+    // and the estimate. Recompute every published slot here so a change to one side
+    // that the other did not follow fails the build instead of shipping a heat map
+    // that disagrees with its own bundle.
+    test.setTimeout(300_000);
+    const report = await page.evaluate(async () => {
+      // The build rounds each slot to 0.1; anything this far off is a real drift,
+      // not the rounding of two equally ordered sums.
+      const tolerance = 0.06;
+      const days = [...document.querySelectorAll(".day")].map((b) => b.dataset.day);
+      const problems = [];
+      let checkedDays = 0, checkedSlots = 0, worst = 0;
+      for (const day of days) {
+        const bundle = await fetch(`./geo/days/${day}.json`, { cache: "no-store" }).then((r) => r.json());
+        const curve = Array.isArray(bundle.people) ? bundle.people : null;
+        if (!curve) { problems.push(`${day}: bundle has no people curve`); continue; }
+        if (curve.length !== 97) { problems.push(`${day}: curve has ${curve.length} slots, expected 97`); continue; }
+        const week = bundle.week || {};
+        const start = week.start_minute == null ? 360 : week.start_minute;
+        const step = week.slot_minutes || 15;
+        // load this bundle into the browser before asking it for the same slots
+        if (await window.KMap.setDay(day) == null) {
+          problems.push(`${day}: browser could not load the day bundle`);
+          continue;
+        }
+        curve.forEach((people, i) => {
+          const slot = start + i * step;
+          const browser = window.KMap.dayPeople(slot);
+          const diff = Math.abs(browser - people);
+          if (diff > worst) worst = diff;
+          if (diff > tolerance) problems.push(`${day} ${slot}: bundle ${people}, browser ${browser.toFixed(3)}`);
+          checkedSlots += 1;
+        });
+        checkedDays += 1;
+      }
+      return { days: days.length, checkedDays, checkedSlots,
+               worst: Number(worst.toFixed(3)),
+               problemCount: problems.length, problems: problems.slice(0, 15) };
+    });
+    expect(report.problemCount, JSON.stringify(report.problems)).toBe(0);
+    expect(report.checkedDays).toBe(report.days);
+    expect(report.checkedSlots).toBe(report.days * 97);
+  });
+
   test("the hour slider handles both 06:00 extremes", async ({ page }) => {
     const slider = page.locator("#timeSlider");
     await expect(slider).toHaveAttribute("min", "360");

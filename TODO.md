@@ -2,6 +2,10 @@
 
 ## Done
 
+- [x] test: every published day bundle's build-time `people` curve is recomputed slot by slot
+      against `KMap.dayPeople()`, so the Python and browser enRoute rules cannot drift apart
+      without CI failing
+
 - [x] 0.20.5 one slot everywhere: the opening view uses the 15-minute slot in progress (floor),
       so the heat, the hour label, the slider and the weekly chip all name the same slot instead
       of the label showing an exact minute while the slider and chip showed the next boundary

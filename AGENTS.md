@@ -202,6 +202,9 @@ no events in the feed falls back to the first published day, and a shared `#d=â€
 over both. `#weekChip` under the sparkline says how the chosen
 15-minute slot ranks in its week (for example "busier than 78% of this week's minutes"); the
 number is build-time data, so do not recompute it in the browser or turn it into a measurement.
+The same bundles carry a `people[]` curve written by `build.py`'s `enroute_people()`, which must
+stay identical to `map.js`'s `enRoute()`/`KMap.dayPeople()`; a Playwright check recomputes every
+slot of every published bundle, so a change to one rule that the other does not follow fails CI.
 
 The â–¶ button beside the hour label (`#timePlay`) plays the day: it steps the slider 15 minutes
 every 160 ms from 06:00 to 06:00 (about 15 s), holds the map in scrubbing mode for the run so the

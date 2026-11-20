@@ -179,9 +179,10 @@ cd tests && npm ci && npx playwright install chromium && npm test
 
 The suite runs 18 Python model tests for calibration states, cap edges, dedupe, missing-time
 handling, TBA start options, competition cases and venue-collision allocation, plus 8 Python
-tests for the route-coverage and data-churn gates. It then runs 28 Playwright checks: opening on
-today in the current 15-minute slot with its weekly-percentile chip, switching
-days, both ends of the hour slider, tapping a real map dot with a mouse and with a touch,
+tests for the route-coverage and data-churn gates. It then runs 29 Playwright checks: opening on
+today in the current 15-minute slot with its weekly-percentile chip, every published day bundle's
+build-time `people` curve recomputed slot by slot against `KMap.dayPeople()` (so the Python and
+browser enRoute rules cannot drift apart), switching days, both ends of the hour slider, tapping a real map dot with a mouse and with a touch,
 duplicate-free data, TBA labels and spread window, capacity caps, the competition and venue-split
 panel rows, the "Why this number?" panel, the Liiga fitted-fill/backtest text, hovering a row
 without moving the list at 1280×900 and at 800×900, tapping a phone row whose card is scrolled
