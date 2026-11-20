@@ -193,10 +193,13 @@ matching event.
 Feeds are not row-capped. A source that returns more events must publish all of them; silently
 truncating a sorted feed on every run would make the missing tail permanent.
 
-A fresh visit opens on today at the current Tampere minute (`defaultMoment()` in `map.js`),
-inside the 06:00–06:00 window: before 06:00 it opens the previous evening's strip, because that
-night is still happening. A day with no events in the feed falls back to the first published day,
-and a shared `#d=…&t=…` link wins over both. `#weekChip` under the sparkline says how the chosen
+A fresh visit opens on today in the 15-minute slot now in progress (`defaultMoment()` and
+`slotStart()` in `map.js`), inside the 06:00–06:00 window: before 06:00 it opens the previous
+evening's strip, because that night is still happening. The opening minute is always on the
+slider's 15-minute grid — floor, not round — so the heat, the hour label, the slider and the
+weekly chip name the same slot instead of disagreeing by up to a quarter of an hour. A day with
+no events in the feed falls back to the first published day, and a shared `#d=…&t=…` link wins
+over both. `#weekChip` under the sparkline says how the chosen
 15-minute slot ranks in its week (for example "busier than 78% of this week's minutes"); the
 number is build-time data, so do not recompute it in the browser or turn it into a measurement.
 

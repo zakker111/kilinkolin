@@ -2,6 +2,10 @@
 
 ## Done
 
+- [x] 0.20.5 one slot everywhere: the opening view uses the 15-minute slot in progress (floor),
+      so the heat, the hour label, the slider and the weekly chip all name the same slot instead
+      of the label showing an exact minute while the slider and chip showed the next boundary
+
 - [x] 0.20.4 open on today at the current Tampere minute (06:00–06:00 window) with a chip that
       ranks the chosen 15-minute slot against the published minutes of its Monday–Sunday week,
       computed at build time from the day curves and shipped in each day bundle

@@ -456,16 +456,24 @@
     return { date: `${p.year}-${p.month}-${p.day}`, minutes: (+p.hour % 24) * 60 + +p.minute };
   }
 
-  /* Open on today at this minute. Before 06:00 that is still the previous evening's
-     strip, because the night out being modelled started yesterday. A day with no
-     events in the feed falls back to the first published day. */
+  /* the 15-minute slot already in progress at `min`, on the slider's grid: the
+     opening minute, the slider, the label and the weekly chip all name the same
+     slot instead of rounding the clock up to the next boundary */
+  function slotStart(min) {
+    const n = HASH_MIN + Math.floor((min - HASH_MIN) / HASH_STEP) * HASH_STEP;
+    return Math.min(HASH_MAX, Math.max(HASH_MIN, n));
+  }
+
+  /* Open on today in the 15-minute slot now in progress. Before 06:00 that is still
+     the previous evening's strip, because the night out being modelled started
+     yesterday. A day with no events in the feed falls back to the first published day. */
   function defaultMoment(days) {
     const now = helsinkiNow();
     let day = now.date, minutes = now.minutes;
     if (minutes < HASH_MIN) { day = addDays(day, -1); minutes += 24 * 60; }
-    if (days.includes(day)) return { day, minutes };
+    if (days.includes(day)) return { day, minutes: slotStart(minutes) };
     if (!days.includes(now.date)) return null;
-    return { day: now.date, minutes: Math.max(HASH_MIN, now.minutes) };
+    return { day: now.date, minutes: slotStart(Math.max(HASH_MIN, now.minutes)) };
   }
 
   function clockLabel(min) {
@@ -1147,13 +1155,14 @@
     currentDay() { return S.day; },
     now() { return S.minutes; },
     /* how the chosen 15-minute slot ranks inside its published week; null when
-       this day came from the full-flow fallback and has no build-time ranking */
+       this day came from the full-flow fallback and has no build-time ranking.
+       The slot in progress wins, so the chip names the same one the label shows. */
     weekStats(minute) {
       const rec = S.weekByDay[S.day];
       if (!rec || !rec.week || !Array.isArray(rec.percent) || !rec.percent.length) return null;
       const step = rec.week.slot_minutes || 15;
       const start = rec.week.start_minute == null ? HASH_MIN : rec.week.start_minute;
-      const idx = Math.max(0, Math.min(rec.percent.length - 1, Math.round((minute - start) / step)));
+      const idx = Math.max(0, Math.min(rec.percent.length - 1, Math.floor((minute - start) / step)));
       return { percent: rec.percent[idx], slot: start + idx * step, week: rec.week };
     },
     /* the view the hash encodes: day, minutes, and the camera */

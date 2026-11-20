@@ -71,7 +71,7 @@ test.describe("Kilinkolin smoke", () => {
     expect(await page.evaluate(() => window.KMap.currentDay())).toBe(targetDay);
   });
 
-  test("opens on today at the current minute and ranks it against the week", async ({ page }) => {
+  test("opens on today in the 15-minute slot in progress and ranks it against the week", async ({ page }) => {
     // Today in Tampere, in the page's 06:00–06:00 day window.
     const now = await page.evaluate(() => {
       const parts = {};
@@ -83,13 +83,26 @@ test.describe("Kilinkolin smoke", () => {
       const d = new Date(`${parts.year}-${parts.month}-${parts.day}T00:00:00`);
       if (minutes < 360) d.setDate(d.getDate() - 1);
       const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-      return { day: iso, minutes: minutes < 360 ? minutes + 1440 : minutes };
+      const raw = minutes < 360 ? minutes + 1440 : minutes;
+      // 360 is on the 15-minute grid: the slot in progress, never the next one
+      return { day: iso, minutes: Math.floor(raw / 15) * 15 };
     });
     const days = await page.evaluate(() => [...document.querySelectorAll(".day")].map((b) => b.dataset.day));
     if (days.includes(now.day)) {
       expect(await page.evaluate(() => window.KMap.currentDay())).toBe(now.day);
       const opened = await page.evaluate(() => window.KMap.now());
-      expect(Math.abs(opened - now.minutes)).toBeLessThan(2);
+      expect(opened).toBe(now.minutes);
+      // the label, the slider and the chip tooltip all name that same slot
+      const view = await page.evaluate(() => ({
+        label: document.getElementById("timeLabel").textContent,
+        slider: Number(document.getElementById("timeSlider").value),
+        chip: document.getElementById("weekChip").title,
+      }));
+      const clock = String(Math.floor(opened / 60) % 24).padStart(2, "0") +
+        ":" + String(opened % 60).padStart(2, "0");
+      expect(view.label).toBe(opened >= 1440 ? `${clock} +1` : clock);
+      expect(view.slider).toBe(opened);
+      expect(view.chip).toContain(`at ${clock}`);
     }
     await expect(page.locator(".day.on")).toHaveCount(1);
     await expect(page.locator("#weekChip")).toBeVisible();

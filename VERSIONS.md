@@ -2,6 +2,23 @@
 
 ## App
 
+### 0.20.5 — 2026-11-20
+One slot everywhere: the opening view, the hour label, the slider and the chip agree.
+
+- Fixed: a fresh visit opened on the exact Tampere minute (say 14:38) while the 15-minute slider
+  snapped to 14:45 and the weekly chip ranked that later slot, so the label and the chip named
+  different times and the heat was painted at a minute no control showed. The opening view now
+  uses the 15-minute slot in progress (`slotStart()` in `map.js`): 14:38 opens at 14:30, which is
+  the slot the label, the slider and the chip all name. `weekStats()` floors to the same slot, so
+  a non-grid minute from a hand-edited `#t=` link still ranks the slot it falls inside.
+- Changed: the chip tooltip's time is now the same time as the hour label, because both come from
+  the chosen slot; the estimate, sparkline cursor and heat already followed `S.minutes` and now
+  follow it onto the grid.
+- Verified: the validator, the Python model and gate tests, a local load at 1280×900 and 390×844
+  (label, slider, chip and estimate named the same slot; dragging the hour and switching the day
+  repainted the heat), and the browser suite (the opening-view check now asserts the label, the
+  slider value and the chip tooltip all match).
+
 ### 0.20.4 — 2026-11-20
 Opens on right now, and says how that minute compares with the week.
 
