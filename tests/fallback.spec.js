@@ -77,6 +77,16 @@ for (const bundle of BROKEN_BUNDLES) {
     expect([...(await panelIds(page))].sort()).toEqual([...firstIds].sort());
     const firstLabel = await page.evaluate((day) => window.KMap.dayLabel(day), firstDay);
     await expect(page.locator("#panelTitle")).toContainText(firstLabel);
+    // The view opens on the current minute, which can be quiet enough that no
+    // crowd is on a route; move to the day's own peak before checking the card.
+    await page.evaluate(() => {
+      let best = 19 * 60, top = -1;
+      for (let m = 360; m <= 1800; m += 15) {
+        const people = window.KMap.dayPeople(m);
+        if (people > top) { top = people; best = m; }
+      }
+      window.KMap.setTime(best);
+    });
     await expect(page.locator("#estimate .e-num")).toContainText("≈");
     const feeding = await page.locator("#estimate .e-line").textContent();
     const fed = Number((feeding.match(/(\d+) event/) || [])[1]);
