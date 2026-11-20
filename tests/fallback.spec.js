@@ -69,11 +69,11 @@ for (const bundle of BROKEN_BUNDLES) {
     const byDay = await idsByDay(page);
     const days = Object.keys(byDay).sort();
     const firstDay = await page.evaluate(() => window.KMap.currentDay());
-    expect(firstDay).toBe(days[0]);
+    expect(days).toContain(firstDay);
     const firstIds = byDay[firstDay];
     expect(firstIds.length).toBeGreaterThan(0);
 
-    // The first day is shown whole, and only the first day.
+    // The opened day is shown whole, and only that day.
     expect([...(await panelIds(page))].sort()).toEqual([...firstIds].sort());
     const firstLabel = await page.evaluate((day) => window.KMap.dayLabel(day), firstDay);
     await expect(page.locator("#panelTitle")).toContainText(firstLabel);

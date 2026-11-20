@@ -2,6 +2,23 @@
 
 ## App
 
+### 0.20.4 — 2026-11-20
+Opens on right now, and says how that minute compares with the week.
+
+- Changed: a fresh visit or a bare link opens on today at the current Tampere minute inside the
+  page's 06:00–06:00 window; before 06:00 that is the previous evening's strip, because the night
+  being modelled started yesterday. A day with no published events falls back to the first day,
+  and a shared `#d=…&t=…` link still wins over both.
+- Added: a chip under the day sparkline — e.g. "busier than 78% of this week's minutes". The rank
+  is computed once per build from the per-day flow curves across the Monday–Sunday week's
+  published 15-minute slots, and shipped in each `geo/days/<date>.json` as `people`, `week` and
+  `week_percent`; the chip reads it back, names the week and says how many of its days are in the
+  build. Ranking counts strictly fewer people, so a quiet 03:00 reads quiet instead of inheriting
+  every tied empty slot. It is an estimate, not a measurement, and follows the hour slider.
+- Verified: the validator, the Python model and gate tests, and a local 390×844 touch check of the
+  opening minute, the chip, a day switch and an hour drag repainting the heat. The browser suite
+  (28 checks, now including the opening minute and the chip) runs in CI.
+
 ### 0.20.3 — 2026-11-18
 Phones keep the event you picked: the map no longer clears it under a moving pointer.
 

@@ -67,6 +67,12 @@ main{position:relative;z-index:1;max-width:1240px;margin:0 auto;padding:0 16px 2
 .sparkCap{font-family:'IBM Plex Mono',monospace;font-size:8.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--paper-dim);flex:none;}
 .sparkSvg{flex:1;height:24px;display:block;}
 .sparkPeak{font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--amber);flex:none;white-space:nowrap;}
+.weekRow{display:flex;margin:-3px 0 10px;}
+.weekRow[hidden]{display:none;}
+.weekChip{display:inline-flex;align-items:center;gap:4px;font-family:'IBM Plex Mono',monospace;
+  font-size:9px;color:var(--paper-dim);background:rgba(74,143,137,.12);
+  border:1px solid rgba(74,143,137,.42);border-radius:999px;padding:2px 8px;cursor:default;}
+.weekChip b{color:var(--teal);font-weight:600;}
 .timeCap{font-family:'IBM Plex Mono',monospace;font-size:8.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--paper-dim);}
 .time{flex:1;appearance:none;-webkit-appearance:none;height:26px;background:transparent;cursor:pointer;}
 .time::-webkit-slider-runnable-track{height:4px;border-radius:999px;
@@ -260,6 +266,8 @@ footer a{color:var(--amber);text-decoration:underline;}
   .time{height:30px;}
   .timeCap{font-size:9.5px;}
   .timeLabel{font-size:14px;}
+  .weekRow{margin:-1px 0 8px;}
+  .weekChip{font-size:9.5px;padding:3px 9px;}
   #mapCanvas{height:clamp(330px,50dvh,520px);min-height:330px;max-height:none;}
   .estimate{left:7px;top:7px;max-width:calc(100% - 56px);padding:7px 9px;border-radius:8px;}
   .e-num{font-size:27px;margin-top:3px;}

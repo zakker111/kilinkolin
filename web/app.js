@@ -118,6 +118,40 @@
     $("timeLabel").title = nextDay ? label + " the next morning" : "";
     paintSlider();
     updateSparkCursor();
+    renderWeekChip(min);
+  }
+
+  /* ------------------------------------------------------- weekly comparison
+     The build ranks every 15-minute slot of a day against the published minutes
+     of its Monday–Sunday week; the chip only reads that number back. Strictly
+     fewer, so a quiet night reads quiet instead of inheriting every empty tie. */
+  function weekRangeLabel(week) {
+    const at = (iso) => new Date(iso + "T00:00:00");
+    const start = at(week.start), end = at(week.end);
+    const from = `${start.getDate()} ${MONTHS[start.getMonth()]}`;
+    const to = `${end.getDate()} ${MONTHS[end.getMonth()]}`;
+    return from === to ? from : `${from}–${to}`;
+  }
+
+  function renderWeekChip(min) {
+    const row = $("weekRow");
+    const chip = $("weekChip");
+    if (!row || !chip) return;
+    const stat = window.KMap.weekStats ? window.KMap.weekStats(min) : null;
+    if (!stat || stat.percent == null) {
+      row.hidden = true;
+      chip.textContent = "";
+      chip.removeAttribute("title");
+      return;
+    }
+    row.hidden = false;
+    chip.innerHTML = `busier than <b>${stat.percent}%</b> of this week's minutes`;
+    const week = stat.week || {};
+    const span = week.start && week.end ? weekRangeLabel(week) : "this week";
+    const days = week.days_published ? `, ${week.days_published} of 7 days in this build` : "";
+    chip.title = `People on routes at ${window.KMap.clockLabel(stat.slot)}, compared with ` +
+      `${week.slots || "the"} published 15-minute slots of ${span}${days}. ` +
+      `An estimate, not a measurement.`;
   }
 
   /* ------------------------------------------------------- right-hand panel

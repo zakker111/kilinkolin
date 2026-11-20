@@ -9,6 +9,7 @@ Everything is estimated: no measured attendance, no tracking.
 from __future__ import annotations
 
 import argparse
+import bisect
 import datetime as dt
 import hashlib
 import json
@@ -1022,6 +1023,88 @@ def venue_record(v):
     return row
 
 
+DAY_START_MINUTE = 6 * 60
+DAY_END_MINUTE = 30 * 60
+DAY_STEP_MINUTE = 15
+
+
+def slice_share(curve, lo, hi):
+    """Share of a curve's people inside [lo, hi); spans default to 15 minutes."""
+    total = 0.0
+    for c in curve or []:
+        span = c.get("span") or DAY_STEP_MINUTE
+        overlap = min(c["t"] + span, hi) - max(c["t"], lo)
+        if overlap > 0:
+            total += c["share"] * overlap / span
+    return min(1.0, max(0.0, total))
+
+
+def enroute_people(flow, minute, start):
+    """The same rule as map.js enRoute: people on this event's routes at a minute."""
+    mid = (flow.get("attendance") or {}).get("mid")
+    if not mid or mid <= 0:
+        return 0.0
+    starts = flow.get("start_options") or [start]
+    base = flow.get("start")
+    if base is None:
+        base = start
+    end_offset = flow["end"] - base if flow.get("end") is not None else None
+    arrive = leave = 0.0
+    for s in starts:
+        arrive += slice_share(flow.get("arrival"), minute - s - DAY_STEP_MINUTE, minute - s)
+        if end_offset is not None:
+            end = s + end_offset
+            leave += slice_share(flow.get("egress"), minute - end - DAY_STEP_MINUTE, minute - end)
+    return mid * min(1.0, arrive / len(starts) + leave / len(starts))
+
+
+def day_people_curve(day_flows):
+    """People on routes every 15 minutes from 06:00 to 06:00, as the sparkline reads it."""
+    curve = []
+    for minute in range(DAY_START_MINUTE, DAY_END_MINUTE + 1, DAY_STEP_MINUTE):
+        total = 0.0
+        for flow in day_flows:
+            start = flow.get("start")
+            if start is None:
+                continue
+            weight = enroute_people(flow, minute, start)
+            if weight >= 1:
+                total += weight
+        curve.append(round(total, 1))
+    return curve
+
+
+def weekly_percentiles(curves):
+    """Rank every 15-minute slot against the published slots of its ISO week.
+
+    A value is the share of the week's minutes with strictly fewer people on routes,
+    so a quiet 03:00 does not inherit the ties of every other empty slot. Weeks are
+    Monday–Sunday; the build ships whichever days of that week it has, and says how
+    many, so the chip never implies a full week that is not there.
+    """
+    weeks = defaultdict(list)
+    for day, curve in curves.items():
+        d = dt.date.fromisoformat(day)
+        weeks[d - dt.timedelta(days=d.isoweekday() - 1)].append((day, curve))
+    percent, meta = {}, {}
+    for monday, members in weeks.items():
+        pool = sorted(value for _, curve in members for value in curve)
+        for day, curve in members:
+            percent[day] = [round(100 * bisect.bisect_left(pool, value) / len(pool)) for value in curve]
+            meta[day] = {
+                "start": monday.isoformat(),
+                "end": (monday + dt.timedelta(days=6)).isoformat(),
+                "days_published": len(members),
+                "slots": len(pool),
+                "slot_minutes": DAY_STEP_MINUTE,
+                "start_minute": DAY_START_MINUTE,
+                "end_minute": DAY_END_MINUTE,
+                "rule": "share of the week's published minutes with fewer people on routes; "
+                        "an estimate, not a measurement",
+            }
+    return percent, meta
+
+
 # ------------------------------------------------------------------- build
 ZONES = []
 VENUES = []
@@ -1422,6 +1505,8 @@ def build(mode="full", with_samples=False):
     by_day = defaultdict(list)
     for flow in flows:
         by_day[date_by_id.get(flow["id"])].append(flow)
+    day_curves = {day: day_people_curve(day_flows) for day, day_flows in by_day.items() if day}
+    week_percent, week_meta = weekly_percentiles(day_curves)
     for day, day_flows in sorted(by_day.items()):
         if not day:
             continue
@@ -1438,6 +1523,9 @@ def build(mode="full", with_samples=False):
             "date": day,
             "events": day_flows,
             "routes": day_routes,
+            "people": day_curves.get(day, []),
+            "week": week_meta.get(day),
+            "week_percent": week_percent.get(day, []),
         })
 
     write(os.path.join(GEO, "coverage.json"), {

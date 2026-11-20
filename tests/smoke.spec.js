@@ -54,20 +54,47 @@ test.describe("Kilinkolin smoke", () => {
   });
 
   test("switching days changes the active day and the panel", async ({ page }) => {
-    const days = page.locator("#dayStrip .day");
-    await expect(days.first()).toHaveClass(/on/);
+    const openDay = await page.evaluate(() => window.KMap.currentDay());
+    await expect(page.locator(`.day[data-day="${openDay}"]`)).toHaveClass(/on/);
     const firstTitle = await page.locator("#panelTitle").innerText();
 
-    const target = days.nth(1);
-    const targetDay = await target.getAttribute("data-day");
+    const targetDay = await page.evaluate((day) =>
+      [...document.querySelectorAll(".day")].map((b) => b.dataset.day).find((d) => d !== day), openDay);
+    const target = page.locator(`.day[data-day="${targetDay}"]`);
     await target.click();
 
     await expect(target).toHaveClass(/on/);
-    await expect(days.first()).not.toHaveClass(/on/);
+    await expect(page.locator(".day.on")).toHaveCount(1);
     await expect(page.locator("#panelTitle")).not.toHaveText(firstTitle);
     await expect(page.locator("#panelTitle")).toContainText("What's on");
     await expect(page.locator("#panelList .panelRow").first()).toBeVisible();
     expect(await page.evaluate(() => window.KMap.currentDay())).toBe(targetDay);
+  });
+
+  test("opens on today at the current minute and ranks it against the week", async ({ page }) => {
+    // Today in Tampere, in the page's 06:00–06:00 day window.
+    const now = await page.evaluate(() => {
+      const parts = {};
+      new Intl.DateTimeFormat("en-GB", {
+        timeZone: "Europe/Helsinki", hour12: false,
+        year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit",
+      }).formatToParts(new Date()).forEach((part) => { parts[part.type] = part.value; });
+      const minutes = (+parts.hour % 24) * 60 + +parts.minute;
+      const d = new Date(`${parts.year}-${parts.month}-${parts.day}T00:00:00`);
+      if (minutes < 360) d.setDate(d.getDate() - 1);
+      const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      return { day: iso, minutes: minutes < 360 ? minutes + 1440 : minutes };
+    });
+    const days = await page.evaluate(() => [...document.querySelectorAll(".day")].map((b) => b.dataset.day));
+    if (days.includes(now.day)) {
+      expect(await page.evaluate(() => window.KMap.currentDay())).toBe(now.day);
+      const opened = await page.evaluate(() => window.KMap.now());
+      expect(Math.abs(opened - now.minutes)).toBeLessThan(2);
+    }
+    await expect(page.locator(".day.on")).toHaveCount(1);
+    await expect(page.locator("#weekChip")).toBeVisible();
+    await expect(page.locator("#weekChip")).toContainText(/busier than \d+% of this week's minutes/);
+    await expect(page.locator("#weekChip")).toHaveAttribute("title", /published 15-minute slots/);
   });
 
   test("the hour slider handles both 06:00 extremes", async ({ page }) => {
@@ -433,7 +460,17 @@ test.describe("the heat layer", () => {
     await page.goto("/", { waitUntil: "domcontentloaded" });
     await expect(page.locator("#dayStrip .day").first()).toBeVisible();
     await page.waitForFunction(() => window.KMap && window.KMap.dayEvents().length > 0);
-    const peak = await page.evaluate(() => window.KMap.now());
+    // the page opens on today's minute now, so scan the day for its own peak
+    // instead of assuming the opening view already sits on it
+    const peak = await page.evaluate(() => {
+      let best = 19 * 60, top = -1;
+      for (let m = 360; m <= 1800; m += 15) {
+        const people = window.KMap.dayPeople(m);
+        if (people > top) { top = people; best = m; }
+      }
+      return best;
+    });
+    await page.evaluate((m) => window.KMap.setTime(m), peak);
     await expect.poll(() => heatPixels(page), { timeout: 15000 }).toBeGreaterThan(300);
 
     // a quiet hour first, so "heat is back" cannot pass on the previous frame
@@ -459,6 +496,15 @@ test.describe("the heat layer", () => {
     }));
     await page.goto("/", { waitUntil: "domcontentloaded" });
     await page.waitForFunction(() => window.KMap && window.KMap.dayEvents().length > 0);
+    // the day's peak, because the opening minute can be a quiet afternoon
+    await page.evaluate(() => {
+      let best = 19 * 60, top = -1;
+      for (let m = 360; m <= 1800; m += 15) {
+        const people = window.KMap.dayPeople(m);
+        if (people > top) { top = people; best = m; }
+      }
+      window.KMap.setTime(best);
+    });
     await expect.poll(() => heatPixels(page), { timeout: 20000, intervals: [250] }).toBeGreaterThan(300);
     expect(await page.evaluate(() => window.KMap.renderer())).toBe("main");
   });

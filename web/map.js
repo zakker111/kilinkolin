@@ -19,7 +19,7 @@
               heatShapes: null, labelShapes: [], shapes: [], zooming: false, scrubbing: false,
               worker: undefined, heatRequestId: 0, heatRequestMeta: null,
               dayList: [], sortedLegs: null, sortedLegsVersion: -1,
-              sortedVenues: null, sortedVenuesVersion: -1, fullFlows: false };
+              sortedVenues: null, sortedVenuesVersion: -1, fullFlows: false, weekByDay: {} };
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
@@ -444,6 +444,28 @@
     if (p.length !== 3) return iso;
     const d = new Date(+p[0], +p[1] - 1, +p[2] + delta);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+
+  /* the date and wall-clock minute in Tampere, not in the visitor's zone */
+  function helsinkiNow() {
+    const p = {};
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Europe/Helsinki", hour12: false,
+      year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit",
+    }).formatToParts(new Date()).forEach((part) => { p[part.type] = part.value; });
+    return { date: `${p.year}-${p.month}-${p.day}`, minutes: (+p.hour % 24) * 60 + +p.minute };
+  }
+
+  /* Open on today at this minute. Before 06:00 that is still the previous evening's
+     strip, because the night out being modelled started yesterday. A day with no
+     events in the feed falls back to the first published day. */
+  function defaultMoment(days) {
+    const now = helsinkiNow();
+    let day = now.date, minutes = now.minutes;
+    if (minutes < HASH_MIN) { day = addDays(day, -1); minutes += 24 * 60; }
+    if (days.includes(day)) return { day, minutes };
+    if (!days.includes(now.date)) return null;
+    return { day: now.date, minutes: Math.max(HASH_MIN, now.minutes) };
   }
 
   function clockLabel(min) {
@@ -1033,6 +1055,9 @@
     if (!res.ok) throw new Error(`day ${day}: HTTP ${res.status}`);
     const doc = await res.json();
     if (!doc || !Array.isArray(doc.events)) throw new Error(`day ${day}: bundle has no events`);
+    // the build ranks this day's minutes against its week; keep it with the day
+    S.weekByDay[day] = { week: doc.week || null,
+                        percent: Array.isArray(doc.week_percent) ? doc.week_percent : null };
     S.flows = {};
     S.routes = doc.routes || {};
     (doc.events || []).forEach((flow) => { S.flows[flow.id] = flow; });
@@ -1076,8 +1101,9 @@
     wire();
     const want = readHash();
     const days = [...new Set(S.events.map((e) => e.date))].sort();
-    S.day = days[0] || null;
-    // a shared link wins over the first day, but only if that day still exists
+    // a fresh visit opens on today at this minute; a shared link still wins
+    const moment = defaultMoment(days);
+    S.day = (moment && moment.day) || days[0] || null;
     if (want && want.day && days.includes(want.day)) S.day = want.day;
     try {
       const venues = await fetch("./geo/venues.json").then((r) => r.json());
@@ -1106,7 +1132,8 @@
     S.map.schedule();
 
     S.minutes = 19 * 60;
-    if (S.day) S.minutes = peakMinute(S.day);
+    if (moment && S.day === moment.day) S.minutes = Math.min(HASH_MAX, Math.max(HASH_MIN, moment.minutes));
+    else if (S.day) S.minutes = peakMinute(S.day);
     if (want && want.minutes != null) S.minutes = clampMinutes(want.minutes);
     refresh();
     // normalise the address bar so it is shareable from the first frame
@@ -1119,6 +1146,16 @@
     onHover(cb) { S.onHover = cb; },
     currentDay() { return S.day; },
     now() { return S.minutes; },
+    /* how the chosen 15-minute slot ranks inside its published week; null when
+       this day came from the full-flow fallback and has no build-time ranking */
+    weekStats(minute) {
+      const rec = S.weekByDay[S.day];
+      if (!rec || !rec.week || !Array.isArray(rec.percent) || !rec.percent.length) return null;
+      const step = rec.week.slot_minutes || 15;
+      const start = rec.week.start_minute == null ? HASH_MIN : rec.week.start_minute;
+      const idx = Math.max(0, Math.min(rec.percent.length - 1, Math.round((minute - start) / step)));
+      return { percent: rec.percent[idx], slot: start + idx * step, week: rec.week };
+    },
     /* the view the hash encodes: day, minutes, and the camera */
     view() {
       const map = S.map;

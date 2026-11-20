@@ -2,6 +2,10 @@
 
 ## Done
 
+- [x] 0.20.4 open on today at the current Tampere minute (06:00–06:00 window) with a chip that
+      ranks the chosen 15-minute slot against the published minutes of its Monday–Sunday week,
+      computed at build time from the day curves and shipped in each day bundle
+
 - [x] 0.20.3 map hover no longer clears the chosen event on a phone: hover needs a
       fine pointer, so a pointer crossing the map cannot wipe the open event card
 

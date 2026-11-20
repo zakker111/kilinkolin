@@ -4,7 +4,7 @@ An **estimated crowd-flow heat map** for events in Tampere: pick a day, drag the
 where the estimated crowd is on the streets at that moment. The map is the answer; the panel
 names what is on.
 
-Live: https://zakker111.github.io/kilinkolin/ · **v0.20.3** · model **2026.11.16** · schema **3**
+Live: https://zakker111.github.io/kilinkolin/ · **v0.20.4** · model **2026.11.16** · schema **3**
 
 ## What it does
 
@@ -21,6 +21,11 @@ Live: https://zakker111.github.io/kilinkolin/ · **v0.20.3** · model **2026.11.
   the day, with the peak marked and labelled (e.g. "peak 21:45 · ≈ 1 683"). It is summed from the
   same per-event model as the estimate card, so the two always agree, and it answers "when is it
   busiest?" without playing the day.
+- **Now, in context** — a fresh visit opens on today at the current Tampere minute (before 06:00
+  it opens the previous evening's strip, which is the night still happening), and a chip under the
+  sparkline ranks that moment in its week: "busier than 78% of this week's minutes". The rank is
+  computed at build time from the same day curves and shipped with each day bundle, and the chip
+  names the week and how many of its days are in the build. A shared `#d=…&t=…` link still wins.
 - **Shareable views** — the day, hour, zoom and map centre live in the URL hash
   (`#d=2026-11-18&t=1095&z=13.20&c=61.49780,23.76100`), so a link reopens exactly what someone
   was looking at, and the address bar follows the view as it changes.
@@ -172,7 +177,8 @@ cd tests && npm ci && npx playwright install chromium && npm test
 
 The suite runs 18 Python model tests for calibration states, cap edges, dedupe, missing-time
 handling, TBA start options, competition cases and venue-collision allocation, plus 8 Python
-tests for the route-coverage and data-churn gates. It then runs 27 Playwright checks: switching
+tests for the route-coverage and data-churn gates. It then runs 28 Playwright checks: opening on
+today at the current minute with its weekly-percentile chip, switching
 days, both ends of the hour slider, tapping a real map dot with a mouse and with a touch,
 duplicate-free data, TBA labels and spread window, capacity caps, the competition and venue-split
 panel rows, the "Why this number?" panel, the Liiga fitted-fill/backtest text, hovering a row

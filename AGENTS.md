@@ -98,6 +98,14 @@ routes those flows reference, keyed by `venue|hub:*` / `venue|zone:*`. It also c
 selected day's bundle; `geo/flows.json` and `geo/routes.json` stay complete for validation and
 the route/data gates, and are the fallback when a day bundle cannot be fetched.
 
+Each bundle also carries `people` (the day's total estimated people on routes for each of the
+97 15-minute slots from 06:00 to 06:00), `week` (its Monday–Sunday week, how many days of that
+week are published, the slot span and count) and `week_percent` (each slot's rank among the
+week's published minutes, 0–100, counting strictly fewer people as quieter). `build.py` computes
+them from the same `arrival[]`/`egress[]` curves the map draws — the chip under the sparkline
+only reads them back — and `validate.py` fails when they are missing or inconsistent. A day
+served from the full-flow fallback has no ranking, so the chip stays hidden.
+
 `web/geo/flows.json`: per event `attendance{low,mid,high,spread}` (or a null band with
 `unknown:true` when the venue capacity is unpublished), `interest{score,band,signals}`,
 `basis{capacity,capacity_unknown,capacity_source,fill,fill_source,interest,
@@ -184,6 +192,13 @@ matching event.
 
 Feeds are not row-capped. A source that returns more events must publish all of them; silently
 truncating a sorted feed on every run would make the missing tail permanent.
+
+A fresh visit opens on today at the current Tampere minute (`defaultMoment()` in `map.js`),
+inside the 06:00–06:00 window: before 06:00 it opens the previous evening's strip, because that
+night is still happening. A day with no events in the feed falls back to the first published day,
+and a shared `#d=…&t=…` link wins over both. `#weekChip` under the sparkline says how the chosen
+15-minute slot ranks in its week (for example "busier than 78% of this week's minutes"); the
+number is build-time data, so do not recompute it in the browser or turn it into a measurement.
 
 The ▶ button beside the hour label (`#timePlay`) plays the day: it steps the slider 15 minutes
 every 160 ms from 06:00 to 06:00 (about 15 s), holds the map in scrubbing mode for the run so the

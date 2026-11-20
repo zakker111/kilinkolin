@@ -67,6 +67,42 @@ def main():
             errors.append(f"geo/days/{day}.json has no event list")
         else:
             day_files[day] = doc
+
+    # The chip beside the day strip ranks the chosen minute against its week. Those
+    # numbers are computed once per build from the day curves; a bundle that cannot
+    # answer for itself is a broken build, not a reason to hide the chip.
+    slots_per_day = (30 * 60 - 6 * 60) // 15 + 1
+    weeks = defaultdict(list)
+    for day, doc in day_files.items():
+        week = doc.get("week")
+        curve = doc.get("people")
+        percent = doc.get("week_percent")
+        if not isinstance(week, dict) or not isinstance(curve, list) or not isinstance(percent, list):
+            errors.append(f"geo/days/{day}.json has no build-time weekly comparison")
+            continue
+        if len(curve) != slots_per_day or len(percent) != slots_per_day:
+            errors.append(f"geo/days/{day}.json weekly array is {len(curve)}/{len(percent)} slots, "
+                          f"expected {slots_per_day}")
+            continue
+        if any(not isinstance(p, int) or p < 0 or p > 100 for p in percent):
+            errors.append(f"geo/days/{day}.json has a week_percent outside 0–100")
+        d = dt.date.fromisoformat(day)
+        monday = d - dt.timedelta(days=d.isoweekday() - 1)
+        if week.get("start") != monday.isoformat() or \
+                week.get("end") != (monday + dt.timedelta(days=6)).isoformat():
+            errors.append(f"geo/days/{day}.json week is {week.get('start')}–{week.get('end')}, "
+                          f"expected {monday}–{monday + dt.timedelta(days=6)}")
+        weeks[monday].append(day)
+    for monday, members in weeks.items():
+        for day in members:
+            week = day_files[day]["week"]
+            if week.get("days_published") != len(members):
+                errors.append(f"geo/days/{day}.json says {week.get('days_published')} days this week, "
+                              f"but {len(members)} bundles exist")
+            if week.get("slots") != len(members) * slots_per_day:
+                errors.append(f"geo/days/{day}.json says {week.get('slots')} week slots, "
+                              f"expected {len(members) * slots_per_day}")
+
     venues = load(os.path.join(WEB, "geo", "venues.json"))
     zones = load(os.path.join(WEB, "geo", "zones.json"))
     routes = load(os.path.join(WEB, "geo", "routes.json")).get("routes", {})
